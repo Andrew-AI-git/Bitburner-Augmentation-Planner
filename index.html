@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bitburner v3.0.1 Augmentation & Buy-Order Planner</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --muted: #8b949e;
+  --accent: #3fb950;
+  --blue: #58a6ff;
+  --warn: #d29922;
+  --danger: #f85149;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: clamp(12px, 1.4vw, 14px);
+  overflow-x: hidden;
+  width: 100%;
+}
+.wrap {
+  max-width: 1520px;
+  margin: 0 auto;
+  padding: clamp(8px, 1.5vw, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+h1 {
+  margin: 0;
+  color: var(--accent);
+  font-size: clamp(15px, 2.2vw, 20px);
+  line-height: 1.25;
+}
+h3 {
+  margin: 0;
+  color: var(--accent);
+  font-size: clamp(13px, 1.6vw, 16px);
+}
+.topbar, .panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: clamp(10px, 1.5vw, 14px);
+  width: 100%;
+}
+.topbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.top-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+}
+.top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+.box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  border-radius: 6px;
+  min-width: 0;
+}
+.box label {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.box input {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font: bold clamp(13px, 1.5vw, 15px) inherit;
+  width: 100%;
+  outline: none;
+}
+.val {
+  font-size: clamp(13px, 1.5vw, 15px);
+  font-weight: bold;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.btn {
+  background: #21262d;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font: 12px inherit;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn-ok {
+  background: rgba(63, 185, 80, 0.16);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: bold;
+}
+.btn-blue {
+  background: rgba(88, 166, 255, 0.14);
+  border-color: var(--blue);
+  color: var(--blue);
+  font-weight: bold;
+}
+
+/* Main responsive grid: side-by-side on wide screens, stacked vertically on narrow/portrait */
+.main-grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 960px), (orientation: portrait) and (max-width: 1024px) {
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.scroll-box {
+  max-height: 70vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+@media (max-width: 960px), (orientation: portrait) and (max-width: 1024px) {
+  .fac-scroll {
+    max-height: 36vh;
+  }
+  .aug-scroll {
+    max-height: none;
+  }
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  padding: 6px 7px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: var(--bg);
+  color: var(--blue);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  cursor: pointer;
+  user-select: none;
+}
+tr:hover { background: rgba(255, 255, 255, 0.03); }
+
+.rep-in {
+  width: 92px;
+  max-width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 3px 6px;
+  border-radius: 4px;
+  font: 12px inherit;
+  text-align: right;
+}
+.ctrl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+.ctrl input[type="text"], .ctrl select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 5px;
+  font: 12px inherit;
+  flex: 1 1 150px;
+  min-width: 0;
+}
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+}
+.b-ok { background: rgba(63, 185, 80, 0.18); color: var(--accent); }
+.b-warn { background: rgba(210, 153, 34, 0.18); color: var(--warn); }
+.b-bad { background: rgba(248, 81, 73, 0.18); color: var(--danger); }
+.b-info { background: rgba(88, 166, 255, 0.15); color: var(--blue); }
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+.tab {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  border-radius: 5px;
+  font-size: 12px;
+}
+.tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: bold;
+}
+
+/* Mobile / narrow portrait card transformation so there is ZERO horizontal scrolling */
+@media (max-width: 760px) {
+  .resp-table thead { display: none; }
+  .resp-table, .resp-table tbody, .resp-table tr, .resp-table td {
+    display: block;
+    width: 100%;
+  }
+  .resp-table tr {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+  }
+  .resp-table td {
+    border: none;
+    padding: 3px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    text-align: right;
+  }
+  .resp-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: bold;
+    text-align: left;
+    flex-shrink: 0;
+  }
+  .resp-table td.card-title {
+    display: block;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+  }
+  .resp-table td.card-title::before { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="top-head">
+      <div>
+        <h1>// BITBURNER v3.0.1 AUGMENTATION PLANNER</h1>
+        <div style="color:var(--muted);font-size:11px">Responsive layout &bull; Auto-saved &bull; Highest-Rep Auto-Fill &bull; Netscript exporter</div>
+      </div>
+      <div class="top-actions">
+        <label class="btn" for="saveFile">&#128194; Load Save (.json.gz)</label>
+        <input type="file" id="saveFile" accept=".gz,.json" style="display:none" onchange="loadSave(event)">
+        <button class="btn btn-blue" onclick="autoFillHighestRep()" title="Maximizes affordable augmentations while prioritizing highest reputation requirements">&#9889; Auto-Fill (High Rep)</button>
+        <button class="btn btn-ok" onclick="exportNetscript()">&#128220; Export buy-augs.js</button>
+        <button class="btn" onclick="resetStorage()">Reset</button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="box"><label>CURRENT CASH</label><input id="cashIn" value="$0" onchange="parseCash()"></div>
+      <div class="box"><label>MULTIPLIER (1.9)</label><input id="multIn" type="number" value="1.9" step="0.01" onchange="saveAndRender()"></div>
+      <div class="box"><label>NFG ADD LEVELS (+)</label><input id="nfgIn" type="number" value="0" min="0" max="500" onchange="saveAndRender()"></div>
+      <div class="box"><label>NFG CURRENT LVL</label><input id="nfgBaseIn" type="number" value="0" min="0" onchange="saveAndRender()"></div>
+      <div class="box"><label>PLANNED BUYS</label><div class="val" id="cntStat">0</div></div>
+      <div class="box"><label>TOTAL COST</label><div class="val" id="costStat">$0</div></div>
+      <div class="box"><label>REMAINING CASH</label><div class="val" id="remStat">$0</div></div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+        <h3>1. Factions &amp; Rep</h3>
+        <div style="display:flex;gap:5px">
+          <button class="btn" onclick="setAllFac(true)">All</button>
+          <button class="btn" onclick="setAllFac(false)">None</button>
+        </div>
+      </div>
+      <input id="fSearch" type="text" placeholder="Filter factions..." oninput="renderFac()" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;margin-bottom:8px;border-radius:5px;font:12px inherit">
+      <div class="scroll-box fac-scroll">
+        <table>
+          <thead><tr><th style="width:30px">In</th><th>Faction</th><th style="text-align:right">Rep</th></tr></thead>
+          <tbody id="fBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="tabs">
+        <div class="tab active" id="tAug" onclick="tab('aug')">2. Browser (<span id="availCnt">0</span> Avail)</div>
+        <div class="tab" id="tOrd" onclick="tab('ord')">3. Optimal Buy Order (<span id="ordCnt">0</span>)</div>
+      </div>
+
+      <div id="vAug">
+        <div class="ctrl">
+          <input id="aSearch" type="text" placeholder="Search name, effect, faction..." oninput="renderAug()">
+          <select id="accF" onchange="renderAug()">
+            <option value="avail">Joined Factions Only</option>
+            <option value="ready">Joined + Enough Rep</option>
+            <option value="all">All 127 Augmentations</option>
+          </select>
+          <select id="tagF" onchange="renderAug()">
+            <option value="ALL">All Categories</option>
+            <option value="Hacking">Hacking</option>
+            <option value="Combat">Combat</option>
+            <option value="Charisma/Rep">Charisma/Rep</option>
+            <option value="Hacknet">Hacknet</option>
+            <option value="Bladeburner">Bladeburner</option>
+            <option value="Crime">Crime</option>
+            <option value="All-Around">All-Around</option>
+            <option value="Infiltration">Infiltration</option>
+            <option value="Special">Special</option>
+          </select>
+        </div>
+        <div class="ctrl">
+          <label style="color:var(--muted);display:inline-flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" id="hideOwn" checked onchange="renderAug()"> Hide Owned
+          </label>
+          <button class="btn" onclick="bulkSelectFiltered(true)">Select All Filtered</button>
+          <button class="btn" onclick="bulkSelectFiltered(false)">Deselect Filtered</button>
+          <button class="btn" onclick="want.clear();saveAndRender()">Clear Cart</button>
+        </div>
+        <div class="scroll-box aug-scroll">
+          <table class="resp-table">
+            <thead>
+              <tr>
+                <th style="width:38px" onclick="sortBy('want')">Buy</th>
+                <th style="width:38px" onclick="sortBy('own')">Own</th>
+                <th onclick="sortBy('name')">Augmentation &#8597;</th>
+                <th onclick="sortBy('price')">Base Price &#8597;</th>
+                <th onclick="sortBy('rep')">Rep Req &#8597;</th>
+                <th onclick="sortBy('stat')">Status &#8597;</th>
+                <th>Prereq</th>
+                <th>Factions</th>
+                <th>Effects</th>
+              </tr>
+            </thead>
+            <tbody id="aBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="vOrd" style="display:none">
+        <div style="color:var(--muted);font-size:12px;margin-bottom:8px">
+          Ordered for minimum total cost while satisfying prerequisites. Additional <b>NeuroFlux Governor</b> levels are appended at the end using Bitburner's <code>1.14^lvl</code> cost and <code>1.25^lvl</code> rep scaling.
+        </div>
+        <div class="scroll-box aug-scroll">
+          <table class="resp-table">
+            <thead>
+              <tr>
+                <th>Step</th>
+                <th>Augmentation</th>
+                <th>Type</th>
+                <th>Base Price</th>
+                <th>Actual Cost</th>
+                <th>Running Total</th>
+                <th>Rep Status</th>
+                <th>Best Joined Faction</th>
+              </tr>
+            </thead>
+            <tbody id="oBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="./planner_data.js"></script>
+<script>
+function setAllFac(v) {
+  FACTIONS.forEach(f => f.joined = v);
+  saveAndRender();
+}
+
+function renderFac() {
+  const q = document.getElementById('fSearch').value.toLowerCase();
+  const tb = document.getElementById('fBody');
+  tb.innerHTML = '';
+  FACTIONS.forEach((f, i) => {
+    if (q && !f.name.toLowerCase().includes(q) && !f.cat.toLowerCase().includes(q)) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><input type="checkbox" ${f.joined ? 'checked' : ''} onchange="FACTIONS[${i}].joined=this.checked;saveAndRender()"></td>
+      <td><div style="font-weight:bold;color:${f.joined ? 'var(--text)' : 'var(--muted)'}">${f.name}</div><div style="font-size:10px;color:var(--muted)">${f.cat}</div></td>
+      <td style="text-align:right"><input class="rep-in" type="number" value="${f.rep}" step="1000" onchange="FACTIONS[${i}].rep=parseFloat(this.value)||0;saveAndRender()"></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function sortBy(c) {
+  if (sCol === c) sAsc = !sAsc;
+  else { sCol = c; sAsc = true; }
+  renderAug();
+}
+
+function bulkSelectFiltered(state) {
+  lastFiltered.forEach(a => {
+    if (a.name === 'NeuroFlux Governor') return;
+    if (state && !a.own) want.add(a.name);
+    else want.delete(a.name);
+  });
+  saveAndRender();
+}
+
+function renderAug() {
+  const q = document.getElementById('aSearch').value.toLowerCase();
+  const acc = document.getElementById('accF').value;
+  const tag = document.getElementById('tagF').value;
+  const hideO = document.getElementById('hideOwn').checked;
+  let av = 0;
+
+  const list = AUGS.map(a => {
+    const inf = getInfo(a);
+    const own = owned.has(a.name) && a.name !== 'NeuroFlux Governor';
+    if (inf.avail && !own) av++;
+    return { ...a, inf, own, w: want.has(a.name) };
+  });
+  document.getElementById('availCnt').textContent = av;
+
+  let flt = list.filter(a => {
+    if (hideO && a.own) return false;
+    if (acc === 'avail' && !a.inf.avail) return false;
+    if (acc === 'ready' && !a.inf.ready) return false;
+    if (tag !== 'ALL' && a.tag !== tag) return false;
+    if (q && !(a.name + ' ' + a.desc + ' ' + a.factions.join(' ')).toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  flt.sort((a, b) => {
+    let c = 0;
+    if (sCol === 'want') c = (b.w ? 1 : 0) - (a.w ? 1 : 0);
+    else if (sCol === 'own') c = (b.own ? 1 : 0) - (a.own ? 1 : 0);
+    else if (sCol === 'name') c = a.name.localeCompare(b.name);
+    else if (sCol === 'price') c = a.price - b.price;
+    else if (sCol === 'rep') c = a.rep - b.rep;
+    else if (sCol === 'stat') c = a.inf.short - b.inf.short;
+    return sAsc ? c : -c;
+  });
+  lastFiltered = flt;
+
+  const tb = document.getElementById('aBody');
+  tb.innerHTML = '';
+  for (const a of flt) {
+    const esc = a.name.replace(/'/g, "\\'");
+    const bdg = a.own ? '<span class="badge b-info">Owned</span>'
+      : !a.inf.avail ? '<span class="badge b-bad">Not Joined</span>'
+      : a.inf.ready ? `<span class="badge b-ok">Ready (${a.inf.best.name})</span>`
+      : `<span class="badge b-warn">Need ${fmtN(a.inf.short)}</span>`;
+    const isNFG = a.name === 'NeuroFlux Governor';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td data-label="Add to Cart">${isNFG ? '<span style="color:var(--muted)" title="Use NFG ADD LEVELS box above">Top</span>' : `<input type="checkbox" ${a.w ? 'checked' : ''} ${a.own ? 'disabled' : ''} onchange="if(this.checked)want.add('${esc}');else want.delete('${esc}');saveAndRender()">`}</td>
+      <td data-label="Owned">${isNFG ? '—' : `<input type="checkbox" ${a.own ? 'checked' : ''} onchange="if(this.checked){owned.add('${esc}');want.delete('${esc}');}else owned.delete('${esc}');saveAndRender()">`}</td>
+      <td class="card-title"><div style="font-weight:bold;color:${a.w ? 'var(--accent)' : 'var(--text)'}">${a.name}</div><span class="badge b-info" style="font-size:10px">${a.tag}</span></td>
+      <td data-label="Base Price">${fmtM(a.price)}</td>
+      <td data-label="Rep Req">${fmtN(a.rep)}</td>
+      <td data-label="Status">${bdg}</td>
+      <td data-label="Prereq" style="font-size:11px;color:var(--muted)">${a.prereq || '—'}</td>
+      <td data-label="Factions" style="font-size:11px">${a.factions.join(', ')}</td>
+      <td data-label="Effects" style="font-size:11px;color:var(--muted)">${a.desc}</td>`;
+    tb.appendChild(tr);
+  }
+}
+
+function renderOrd() {
+  const sched = buildSchedule();
+  const tb = document.getElementById('oBody');
+  tb.innerHTML = '';
+  let run = 0;
+
+  sched.forEach((s, i) => {
+    run = s.runningTotal;
+    const inf = getInfo(s.aug, s.reqRep);
+    const bdg = !inf.avail ? '<span class="badge b-bad">Join Faction</span>'
+      : inf.ready ? '<span class="badge b-ok">Ready</span>'
+      : `<span class="badge b-warn">Need ${fmtN(inf.short)}</span>`;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td data-label="Step" style="color:var(--blue);font-weight:bold">#${i + 1}</td>
+      <td class="card-title" style="font-weight:bold">${s.aug.name}</td>
+      <td data-label="Type"><span class="badge ${s.reason === 'Selected' ? 'b-ok' : 'b-warn'}">${s.reason}</span></td>
+      <td data-label="Base Price">${fmtM(s.basePrice)}</td>
+      <td data-label="Actual Cost" style="color:var(--accent);font-weight:bold">${fmtM(s.actualCost)}</td>
+      <td data-label="Running Total">${fmtM(run)}</td>
+      <td data-label="Rep Status">${bdg}</td>
+      <td data-label="Best Faction" style="font-size:11px">${inf.best ? inf.best.name + ' (' + fmtN(inf.maxR) + ' rep)' : s.aug.factions.slice(0, 3).join(', ')}</td>`;
+    tb.appendChild(tr);
+  });
+
+  document.getElementById('cntStat').textContent = sched.length;
+  document.getElementById('ordCnt').textContent = sched.length;
+  document.getElementById('costStat').textContent = fmtM(run);
+  const rem = cash - run;
+  const rEl = document.getElementById('remStat');
+  rEl.textContent = fmtM(rem);
+  rEl.style.color = rem >= 0 ? 'var(--accent)' : 'var(--danger)';
+}
+
+function tab(t) {
+  document.getElementById('tAug').classList.toggle('active', t === 'aug');
+  document.getElementById('tOrd').classList.toggle('active', t === 'ord');
+  document.getElementById('vAug').style.display = t === 'aug' ? 'block' : 'none';
+  document.getElementById('vOrd').style.display = t === 'ord' ? 'block' : 'none';
+}
+
+function saveAndRender() {
+  saveState();
+  renderFac();
+  renderAug();
+  renderOrd();
+}
+
+async function loadSave(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  try {
+    const txt = f.name.endsWith('.gz')
+      ? await new Response(f.stream().pipeThrough(new DecompressionStream('gzip'))).text()
+      : await f.text();
+    const out = JSON.parse(txt);
+    const d = typeof out.data === 'string' ? JSON.parse(out.data) : (out.data || out);
+    const pr = typeof d.PlayerSave === 'string' ? JSON.parse(d.PlayerSave) : (d.PlayerSave || {});
+    const p = pr.data || pr;
+    const fr = typeof d.FactionsSave === 'string' ? JSON.parse(d.FactionsSave) : (d.FactionsSave || {});
+
+    cash = Number(p.money) || 0;
+    document.getElementById('cashIn').value = fmtM(cash);
+
+    const j = new Set(p.factions || []), rm = {};
+    for (const [fn, fo] of Object.entries(fr)) {
+      const fd = (typeof fo === 'string' ? JSON.parse(fo) : fo).data || (typeof fo === 'string' ? JSON.parse(fo) : fo);
+      if (fd.isMember) j.add(fn);
+      if (typeof fd.playerReputation === 'number') rm[fn] = Math.floor(fd.playerReputation);
+    }
+    if (p.faction_rep) {
+      for (const [fn, r] of Object.entries(p.faction_rep)) rm[fn] = Math.floor(r);
+    }
+
+    FACTIONS.forEach(x => { x.joined = j.has(x.name); x.rep = rm[x.name] || 0; });
+
+    owned.clear();
+    let nfgLvl = 0;
+    for (const k of ['augmentations', 'queuedAugmentations']) {
+      if (Array.isArray(p[k])) {
+        p[k].forEach(it => {
+          const nm = typeof it === 'string' ? it : it.name;
+          if (nm === 'NeuroFlux Governor') nfgLvl += (it.level || 1);
+          else if (nm) owned.add(nm);
+        });
+      }
+    }
+    document.getElementById('nfgBaseIn').value = nfgLvl;
+    saveAndRender();
+    alert(`Loaded save! Cash: ${fmtM(cash)} | Joined: ${j.size} | Owned Augs: ${owned.size} | NFG Lvl: ${nfgLvl}`);
+  } catch (e) {
+    alert('Error reading save: ' + e.message);
+  }
+}
+
+loadState();
+renderFac();
+renderAug();
+renderOrd();
+</script>
+</body>
+</html>
