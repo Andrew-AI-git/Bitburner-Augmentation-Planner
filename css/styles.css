@@ -349,6 +349,10 @@ td.col-effects {
   color: var(--muted);
 }
 
+td.col-effects.has-lore {
+  cursor: help;
+}
+
 .nowrap {
   white-space: nowrap;
 }

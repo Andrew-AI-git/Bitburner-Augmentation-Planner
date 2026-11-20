@@ -8,8 +8,11 @@ const STORE_KEY = 'bb_aug_planner_gh_v3';
 /** @type {Set<string>} Augmentation names selected for purchase */
 let want = new Set();
 
-/** @type {Set<string>} Augmentation names already owned/installed */
+/** @type {Set<string>} Augmentation names already owned/installed (Browser catalog) */
 let owned = new Set();
+
+/** @type {Set<string>} Non-faction special/Grafting/Labyrinth augmentations recognized from saves */
+let specialOwned = new Set();
 
 /** @type {number} Player's current cash balance */
 let cash = 0;
@@ -117,7 +120,8 @@ function saveState() {
         nfgBase: getNfgBase(),
         factions: FACTIONS.map((f) => [f.name, f.joined ? 1 : 0, f.rep]),
         want: [...want],
-        owned: [...owned]
+        owned: [...owned],
+        specialOwned: [...specialOwned]
       })
     );
   } catch (err) {
@@ -126,7 +130,8 @@ function saveState() {
 }
 
 /**
- * Hydrates planner state from localStorage if available.
+ * Hydrates planner state from localStorage if available, automatically migrating
+ * any legacy augmentation names to their canonical official Bitburner names.
  */
 function loadState() {
   try {
@@ -151,8 +156,51 @@ function loadState() {
       });
     }
 
-    if (saved.want) want = new Set(saved.want);
-    if (saved.owned) owned = new Set(saved.owned);
+    let migrated = false;
+
+    if (Array.isArray(saved.want)) {
+      want = new Set();
+      for (const rawName of saved.want) {
+        const canon = resolveAugName(rawName);
+        if (canon && augMap[canon]) {
+          want.add(canon);
+          if (canon !== rawName) migrated = true;
+        } else if (rawName) {
+          migrated = true;
+        }
+      }
+    }
+
+    if (Array.isArray(saved.owned)) {
+      owned = new Set();
+      specialOwned = new Set();
+      for (const rawName of saved.owned) {
+        const canon = resolveAugName(rawName);
+        if (canon && augMap[canon]) {
+          owned.add(canon);
+          if (canon !== rawName) migrated = true;
+        } else if (canon && specialAugMap[canon]) {
+          specialOwned.add(canon);
+          if (canon !== rawName) migrated = true;
+        } else if (rawName) {
+          migrated = true;
+        }
+      }
+    }
+
+    if (Array.isArray(saved.specialOwned)) {
+      for (const rawName of saved.specialOwned) {
+        const canon = resolveAugName(rawName);
+        if (canon && specialAugMap[canon]) {
+          specialOwned.add(canon);
+          if (canon !== rawName) migrated = true;
+        }
+      }
+    }
+
+    if (migrated) {
+      saveState();
+    }
   } catch (err) {
     // Ignore corrupted storage payloads
   }

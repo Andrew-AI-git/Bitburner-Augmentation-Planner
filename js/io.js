@@ -129,15 +129,23 @@ async function loadSave(ev) {
     });
 
     owned.clear();
+    specialOwned.clear();
     let nfgLvl = 0;
+
     for (const key of ['augmentations', 'queuedAugmentations']) {
       if (Array.isArray(player[key])) {
         player[key].forEach((entry) => {
-          const name = typeof entry === 'string' ? entry : entry.name;
-          if (name === 'NeuroFlux Governor') {
-            nfgLvl += entry.level || 1;
-          } else if (name) {
-            owned.add(name);
+          const rawName = typeof entry === 'string' ? entry : entry?.name;
+          const canon = resolveAugName(rawName);
+          if (!canon) return;
+
+          if (canon === 'NeuroFlux Governor') {
+            nfgLvl += entry?.level || 1;
+          } else if (augMap[canon]) {
+            owned.add(canon);
+            want.delete(canon);
+          } else if (specialAugMap[canon]) {
+            specialOwned.add(canon);
           }
         });
       }
@@ -145,8 +153,10 @@ async function loadSave(ev) {
 
     document.getElementById('nfgBaseIn').value = nfgLvl;
     saveAndRender();
+
+    const specialNote = specialOwned.size ? ` (+${specialOwned.size} special)` : '';
     showToast(
-      `Loaded save! Cash: ${fmtM(cash)} | Joined: ${joinedSet.size} | Owned Augs: ${owned.size} | NFG Lvl: ${nfgLvl}`,
+      `Loaded save! Cash: ${fmtM(cash)} | Joined: ${joinedSet.size} | Owned Augs: ${owned.size}${specialNote} | NFG Lvl: ${nfgLvl}`,
       'success'
     );
   } catch (err) {

@@ -234,7 +234,7 @@ function renderAug() {
       <td data-label="Status">${statusBadge}</td>
       <td data-label="Prereq" class="text-muted-sm">${aug.prereq ? escapeHtml(aug.prereq) : '—'}</td>
       <td data-label="Factions" class="col-factions">${escapeHtml(aug.factions.join(', '))}</td>
-      <td data-label="Effects" class="col-effects">${escapeHtml(aug.desc)}</td>
+      <td data-label="Effects" class="col-effects${aug.lore ? ' has-lore' : ''}"${aug.lore ? ` title="${escapeHtml(aug.lore)}"` : ''}>${escapeHtml(aug.desc)}</td>
     `;
     tbody.appendChild(tr);
   }
