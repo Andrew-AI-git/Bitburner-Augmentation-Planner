@@ -1,754 +1,153 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bitburner v3.0.1 Augmentation & Buy-Order Planner</title>
-<style>
-:root {
-  --bg: #0d1117;
-  --panel: #161b22;
-  --border: #30363d;
-  --text: #c9d1d9;
-  --muted: #8b949e;
-  --accent: #3fb950;
-  --blue: #58a6ff;
-  --warn: #d29922;
-  --danger: #f85149;
-}
-* { box-sizing: border-box; }
-html, body {
-  margin: 0;
-  padding: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: clamp(12px, 1.3vw, 14px);
-  width: 100%;
-  overflow-x: hidden;
-}
-.wrap {
-  max-width: 1800px;
-  margin: 0 auto;
-  padding: clamp(8px, 1.5vw, 16px);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-h1 {
-  margin: 0;
-  color: var(--accent);
-  font-size: clamp(15px, 2vw, 20px);
-  line-height: 1.25;
-}
-h3 {
-  margin: 0;
-  color: var(--accent);
-  font-size: clamp(13px, 1.5vw, 16px);
-}
-.topbar, .panel {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: clamp(10px, 1.4vw, 14px);
-  width: 100%;
-}
-.topbar {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.top-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: space-between;
-  align-items: center;
-}
-.top-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 8px;
-  width: 100%;
-}
-.box {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  padding: 6px 10px;
-  border-radius: 6px;
-  min-width: 0;
-}
-.box label {
-  display: block;
-  font-size: 10px;
-  color: var(--muted);
-  margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.box input {
-  background: transparent;
-  border: none;
-  color: var(--accent);
-  font: bold clamp(13px, 1.4vw, 15px) inherit;
-  width: 100%;
-  outline: none;
-}
-.val {
-  font-size: clamp(13px, 1.4vw, 15px);
-  font-weight: bold;
-  color: var(--accent);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.btn {
-  background: #21262d;
-  color: var(--text);
-  border: 1px solid var(--border);
-  padding: 6px 10px;
-  border-radius: 5px;
-  cursor: pointer;
-  font: 12px inherit;
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-}
-.btn:hover { border-color: var(--accent); color: var(--accent); }
-.btn.active-view {
-  background: rgba(88, 166, 255, 0.16);
-  border-color: var(--blue);
-  color: var(--blue);
-  font-weight: bold;
-}
-.btn-ok {
-  background: rgba(63, 185, 80, 0.16);
-  border-color: var(--accent);
-  color: var(--accent);
-  font-weight: bold;
-}
-.btn-blue {
-  background: rgba(88, 166, 255, 0.14);
-  border-color: var(--blue);
-  color: var(--blue);
-  font-weight: bold;
-}
-
-/* Stacked Full-Width Layout: Factions Panel on Top, Augmentations Panel Below */
-.main-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-}
-
-/* Factions Grid inside top collapsible panel so it uses full horizontal width cleanly */
-.fac-header {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-.fac-body-wrap {
-  margin-top: 10px;
-}
-.fac-body-wrap.collapsed {
-  display: none;
-}
-.fac-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
-  gap: 8px;
-  max-height: 300px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-.fac-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 9px;
-}
-.fac-item.joined {
-  border-color: rgba(63, 185, 80, 0.45);
-}
-.fac-left {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  flex: 1;
-}
-.fac-name {
-  font-weight: bold;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.fac-cat {
-  font-size: 10px;
-  color: var(--muted);
-}
-.rep-in {
-  width: 90px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 3px 6px;
-  border-radius: 4px;
-  font: 12px inherit;
-  text-align: right;
-  flex-shrink: 0;
-}
-
-.scroll-box {
-  max-height: 72vh;
-  overflow-y: auto;
-  overflow-x: auto;
-  width: 100%;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-th, td {
-  padding: 7px 8px;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-  vertical-align: top;
-}
-th {
-  background: var(--bg);
-  color: var(--blue);
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-}
-tr:hover { background: rgba(255, 255, 255, 0.03); }
-
-/* Keep table columns readable and wrap text instead of clipping */
-td.col-factions {
-  min-width: 150px;
-  max-width: 240px;
-  white-space: normal;
-  word-break: break-word;
-}
-td.col-effects {
-  min-width: 200px;
-  white-space: normal;
-  word-break: break-word;
-}
-
-.ctrl {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-bottom: 10px;
-  align-items: center;
-}
-.ctrl input[type="text"], .ctrl select {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 5px 8px;
-  border-radius: 5px;
-  font: 12px inherit;
-  flex: 1 1 160px;
-  min-width: 0;
-}
-.badge {
-  display: inline-block;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: bold;
-  white-space: nowrap;
-}
-.b-ok { background: rgba(63, 185, 80, 0.18); color: var(--accent); }
-.b-warn { background: rgba(210, 153, 34, 0.18); color: var(--warn); }
-.b-bad { background: rgba(248, 81, 73, 0.18); color: var(--danger); }
-.b-info { background: rgba(88, 166, 255, 0.15); color: var(--blue); }
-
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-bottom: 10px;
-  align-items: center;
-  justify-content: space-between;
-}
-.tab-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  align-items: center;
-}
-.tab {
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  cursor: pointer;
-  border-radius: 5px;
-  font-size: 12px;
-}
-.tab.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  font-weight: bold;
-}
-
-/* Card Mode Styles (can be triggered manually OR automatically on screens < 1400px) */
-.card-mode .resp-table thead { display: none; }
-.card-mode .resp-table,
-.card-mode .resp-table tbody {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 10px;
-  width: 100%;
-}
-@media (max-width: 420px) {
-  .card-mode .resp-table tbody {
-    grid-template-columns: 1fr;
-  }
-}
-.card-mode .resp-table tr {
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 10px 12px;
-  gap: 4px;
-}
-.card-mode .resp-table td {
-  border: none;
-  padding: 3px 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
-  text-align: right;
-  max-width: none;
-  min-width: 0;
-}
-.card-mode .resp-table td::before {
-  content: attr(data-label);
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: bold;
-  text-align: left;
-  flex-shrink: 0;
-}
-.card-mode .resp-table td.card-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  text-align: left;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 6px;
-  margin-bottom: 4px;
-  order: -1;
-}
-.card-mode .resp-table td.card-title::before { display: none; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitburner v3.0.1 Augmentation &amp; Buy-Order Planner</title>
+  <link rel="stylesheet" href="./css/styles.css">
+  <script defer src="./js/data.js"></script>
+  <script defer src="./js/state.js"></script>
+  <script defer src="./js/scheduler.js"></script>
+  <script defer src="./js/io.js"></script>
+  <script defer src="./js/ui.js"></script>
 </head>
 <body>
-<div class="wrap">
-  <div class="topbar">
-    <div class="top-head">
-      <div>
-        <h1>// BITBURNER v3.0.1 AUGMENTATION PLANNER</h1>
-        <div style="color:var(--muted);font-size:11px">Adaptive Table/Card layout &bull; Auto-saved &bull; Highest-Rep Auto-Fill &bull; Netscript exporter</div>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="top-head">
+        <div>
+          <h1>// BITBURNER v3.0.1 AUGMENTATION PLANNER</h1>
+          <div class="subtitle">Adaptive Table/Card layout &bull; Auto-saved &bull; Highest-Rep Auto-Fill &bull; Netscript exporter</div>
+        </div>
+        <div class="top-actions">
+          <label class="btn" for="saveFile">&#128194; Load Save (.json.gz)</label>
+          <input type="file" id="saveFile" accept=".gz,.json" class="hidden-input">
+          <button type="button" class="btn btn-blue" id="autoFillBtn" title="Maximizes affordable augmentations while prioritizing highest reputation requirements">&#9889; Auto-Fill (High Rep)</button>
+          <button type="button" class="btn btn-ok" id="exportBtn">&#128220; Export buy-augs.js</button>
+          <button type="button" class="btn" id="resetBtn">Reset</button>
+        </div>
       </div>
-      <div class="top-actions">
-        <label class="btn" for="saveFile">&#128194; Load Save (.json.gz)</label>
-        <input type="file" id="saveFile" accept=".gz,.json" style="display:none" onchange="loadSave(event)">
-        <button class="btn btn-blue" onclick="autoFillHighestRep()" title="Maximizes affordable augmentations while prioritizing highest reputation requirements">&#9889; Auto-Fill (High Rep)</button>
-        <button class="btn btn-ok" onclick="exportNetscript()">&#128220; Export buy-augs.js</button>
-        <button class="btn" onclick="resetStorage()">Reset</button>
+
+      <div class="stats-grid">
+        <div class="box"><label for="cashIn">CURRENT CASH</label><input id="cashIn" value="$0"></div>
+        <div class="box"><label for="multIn">MULTIPLIER (1.9)</label><input id="multIn" type="number" value="1.9" step="0.01"></div>
+        <div class="box"><label for="nfgIn">NFG ADD LEVELS (+)</label><input id="nfgIn" type="number" value="0" min="0" max="500"></div>
+        <div class="box"><label for="nfgBaseIn">NFG CURRENT LVL</label><input id="nfgBaseIn" type="number" value="0" min="0"></div>
+        <div class="box"><label>PLANNED BUYS</label><div class="val" id="cntStat">0</div></div>
+        <div class="box"><label>TOTAL COST</label><div class="val" id="costStat">$0</div></div>
+        <div class="box"><label>REMAINING CASH</label><div class="val" id="remStat">$0</div></div>
       </div>
     </div>
 
-    <div class="stats-grid">
-      <div class="box"><label>CURRENT CASH</label><input id="cashIn" value="$0" onchange="parseCash()"></div>
-      <div class="box"><label>MULTIPLIER (1.9)</label><input id="multIn" type="number" value="1.9" step="0.01" onchange="saveAndRender()"></div>
-      <div class="box"><label>NFG ADD LEVELS (+)</label><input id="nfgIn" type="number" value="0" min="0" max="500" onchange="saveAndRender()"></div>
-      <div class="box"><label>NFG CURRENT LVL</label><input id="nfgBaseIn" type="number" value="0" min="0" onchange="saveAndRender()"></div>
-      <div class="box"><label>PLANNED BUYS</label><div class="val" id="cntStat">0</div></div>
-      <div class="box"><label>TOTAL COST</label><div class="val" id="costStat">$0</div></div>
-      <div class="box"><label>REMAINING CASH</label><div class="val" id="remStat">$0</div></div>
+    <div class="main-stack">
+      <!-- Top Full-Width Panel: Factions & Reputation -->
+      <div class="panel">
+        <div class="fac-header">
+          <div class="fac-header-group">
+            <h3>1. Factions &amp; Reputation (<span id="joinedFacCnt">0</span> Joined)</h3>
+            <button type="button" class="btn" id="toggleFacBtn">&#9662; Hide Factions</button>
+          </div>
+          <div class="fac-actions-group">
+            <input id="fSearch" type="text" class="fac-search-input" placeholder="Filter factions...">
+            <button type="button" class="btn" id="joinAllBtn">Join All</button>
+            <button type="button" class="btn" id="joinNoneBtn">None</button>
+          </div>
+        </div>
+        <div class="fac-body-wrap" id="facBodyWrap">
+          <div class="fac-grid" id="fBody"></div>
+        </div>
+      </div>
+
+      <!-- Bottom Full-Width Panel: Augmentation Browser & Optimal Buy Order -->
+      <div class="panel" id="augPanel">
+        <div class="tabs">
+          <div class="tab-group">
+            <div class="tab active" id="tAug">2. Browser (<span id="availCnt">0</span> Avail)</div>
+            <div class="tab" id="tOrd">3. Optimal Buy Order (<span id="ordCnt">0</span>)</div>
+          </div>
+          <div class="tab-group">
+            <span class="layout-label">Layout:</span>
+            <button type="button" class="btn active-view" id="vAutoBtn">Auto</button>
+            <button type="button" class="btn" id="vTableBtn">Table</button>
+            <button type="button" class="btn" id="vCardBtn">Cards</button>
+          </div>
+        </div>
+
+        <div id="vAug">
+          <div class="ctrl">
+            <input id="aSearch" type="text" placeholder="Search name, effect, faction...">
+            <select id="accF">
+              <option value="avail">Joined Factions Only</option>
+              <option value="ready">Joined + Enough Rep</option>
+              <option value="all">All 127 Augmentations</option>
+            </select>
+            <select id="tagF">
+              <option value="ALL">All Categories</option>
+              <option value="Hacking">Hacking</option>
+              <option value="Combat">Combat</option>
+              <option value="Charisma/Rep">Charisma/Rep</option>
+              <option value="Hacknet">Hacknet</option>
+              <option value="Bladeburner">Bladeburner</option>
+              <option value="Crime">Crime</option>
+              <option value="All-Around">All-Around</option>
+              <option value="Infiltration">Infiltration</option>
+              <option value="Special">Special</option>
+            </select>
+          </div>
+          <div class="ctrl">
+            <label class="hide-owned-label">
+              <input type="checkbox" id="hideOwn" checked> Hide Owned
+            </label>
+            <button type="button" class="btn" id="selectFilteredBtn">Select All Filtered</button>
+            <button type="button" class="btn" id="deselectFilteredBtn">Deselect Filtered</button>
+            <button type="button" class="btn" id="clearCartBtn">Clear Cart</button>
+          </div>
+          <div class="scroll-box" id="augScrollBox">
+            <table class="resp-table">
+              <thead id="augTableHead">
+                <tr>
+                  <th style="width:42px" data-sort="want">Buy</th>
+                  <th style="width:42px" data-sort="own">Own</th>
+                  <th data-sort="name">Augmentation &#8597;</th>
+                  <th data-sort="price">Base Price &#8597;</th>
+                  <th data-sort="rep">Rep Req &#8597;</th>
+                  <th data-sort="stat">Status &#8597;</th>
+                  <th>Prereq</th>
+                  <th>Factions</th>
+                  <th>Effects</th>
+                </tr>
+              </thead>
+              <tbody id="aBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="vOrd" style="display:none">
+          <div class="ord-note">
+            Ordered for minimum total cost while satisfying prerequisites. Additional <b>NeuroFlux Governor</b> levels are appended at the end using Bitburner's <code>1.14^lvl</code> cost and <code>1.25^lvl</code> rep scaling.
+          </div>
+          <div class="scroll-box" id="ordScrollBox">
+            <table class="resp-table">
+              <thead>
+                <tr>
+                  <th>Step</th>
+                  <th>Augmentation</th>
+                  <th>Type</th>
+                  <th>Base Price</th>
+                  <th>Actual Cost</th>
+                  <th>Running Total</th>
+                  <th>Rep Status</th>
+                  <th>Best Joined Faction</th>
+                </tr>
+              </thead>
+              <tbody id="oBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="main-stack">
-    <!-- Top Full-Width Panel: Factions & Reputation -->
-    <div class="panel">
-      <div class="fac-header">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <h3>1. Factions &amp; Reputation (<span id="joinedFacCnt">0</span> Joined)</h3>
-          <button class="btn" id="toggleFacBtn" onclick="toggleFacPanel()">&#9662; Hide Factions</button>
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <input id="fSearch" type="text" placeholder="Filter factions..." oninput="renderFac()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font:12px inherit;width:170px">
-          <button class="btn" onclick="setAllFac(true)">Join All</button>
-          <button class="btn" onclick="setAllFac(false)">None</button>
-        </div>
-      </div>
-      <div class="fac-body-wrap" id="facBodyWrap">
-        <div class="fac-grid" id="fBody"></div>
-      </div>
-    </div>
-
-    <!-- Bottom Full-Width Panel: Augmentation Browser & Optimal Buy Order -->
-    <div class="panel" id="augPanel">
-      <div class="tabs">
-        <div class="tab-group">
-          <div class="tab active" id="tAug" onclick="tab('aug')">2. Browser (<span id="availCnt">0</span> Avail)</div>
-          <div class="tab" id="tOrd" onclick="tab('ord')">3. Optimal Buy Order (<span id="ordCnt">0</span>)</div>
-        </div>
-        <div class="tab-group">
-          <span style="color:var(--muted);font-size:11px">Layout:</span>
-          <button class="btn active-view" id="vAutoBtn" onclick="setViewMode('auto')">Auto</button>
-          <button class="btn" id="vTableBtn" onclick="setViewMode('table')">Table</button>
-          <button class="btn" id="vCardBtn" onclick="setViewMode('card')">Cards</button>
-        </div>
-      </div>
-
-      <div id="vAug">
-        <div class="ctrl">
-          <input id="aSearch" type="text" placeholder="Search name, effect, faction..." oninput="renderAug()">
-          <select id="accF" onchange="renderAug()">
-            <option value="avail">Joined Factions Only</option>
-            <option value="ready">Joined + Enough Rep</option>
-            <option value="all">All 127 Augmentations</option>
-          </select>
-          <select id="tagF" onchange="renderAug()">
-            <option value="ALL">All Categories</option>
-            <option value="Hacking">Hacking</option>
-            <option value="Combat">Combat</option>
-            <option value="Charisma/Rep">Charisma/Rep</option>
-            <option value="Hacknet">Hacknet</option>
-            <option value="Bladeburner">Bladeburner</option>
-            <option value="Crime">Crime</option>
-            <option value="All-Around">All-Around</option>
-            <option value="Infiltration">Infiltration</option>
-            <option value="Special">Special</option>
-          </select>
-        </div>
-        <div class="ctrl">
-          <label style="color:var(--muted);display:inline-flex;align-items:center;gap:4px;cursor:pointer">
-            <input type="checkbox" id="hideOwn" checked onchange="renderAug()"> Hide Owned
-          </label>
-          <button class="btn" onclick="bulkSelectFiltered(true)">Select All Filtered</button>
-          <button class="btn" onclick="bulkSelectFiltered(false)">Deselect Filtered</button>
-          <button class="btn" onclick="want.clear();saveAndRender()">Clear Cart</button>
-        </div>
-        <div class="scroll-box" id="augScrollBox">
-          <table class="resp-table">
-            <thead>
-              <tr>
-                <th style="width:42px" onclick="sortBy('want')">Buy</th>
-                <th style="width:42px" onclick="sortBy('own')">Own</th>
-                <th onclick="sortBy('name')">Augmentation &#8597;</th>
-                <th onclick="sortBy('price')">Base Price &#8597;</th>
-                <th onclick="sortBy('rep')">Rep Req &#8597;</th>
-                <th onclick="sortBy('stat')">Status &#8597;</th>
-                <th>Prereq</th>
-                <th>Factions</th>
-                <th>Effects</th>
-              </tr>
-            </thead>
-            <tbody id="aBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div id="vOrd" style="display:none">
-        <div style="color:var(--muted);font-size:12px;margin-bottom:8px">
-          Ordered for minimum total cost while satisfying prerequisites. Additional <b>NeuroFlux Governor</b> levels are appended at the end using Bitburner's <code>1.14^lvl</code> cost and <code>1.25^lvl</code> rep scaling.
-        </div>
-        <div class="scroll-box" id="ordScrollBox">
-          <table class="resp-table">
-            <thead>
-              <tr>
-                <th>Step</th>
-                <th>Augmentation</th>
-                <th>Type</th>
-                <th>Base Price</th>
-                <th>Actual Cost</th>
-                <th>Running Total</th>
-                <th>Rep Status</th>
-                <th>Best Joined Faction</th>
-              </tr>
-            </thead>
-            <tbody id="oBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script src="./planner_data.js"></script>
-<script>
-let viewMode = localStorage.getItem('bb_view_mode') || 'auto';
-let facCollapsed = localStorage.getItem('bb_fac_collapsed') === '1';
-
-function applyResponsiveLayout() {
-  const panel = document.getElementById('augPanel');
-  // Automatically switch to card layout when viewport width is < 1400px (includes 1280x1024 and mobile) unless overridden
-  const useCards = viewMode === 'card' || (viewMode === 'auto' && window.innerWidth < 1400);
-  panel.classList.toggle('card-mode', useCards);
-
-  document.getElementById('vAutoBtn').classList.toggle('active-view', viewMode === 'auto');
-  document.getElementById('vTableBtn').classList.toggle('active-view', viewMode === 'table');
-  document.getElementById('vCardBtn').classList.toggle('active-view', viewMode === 'card');
-}
-
-function setViewMode(m) {
-  viewMode = m;
-  localStorage.setItem('bb_view_mode', m);
-  applyResponsiveLayout();
-}
-
-function toggleFacPanel() {
-  facCollapsed = !facCollapsed;
-  localStorage.setItem('bb_fac_collapsed', facCollapsed ? '1' : '0');
-  updateFacCollapseUI();
-}
-
-function updateFacCollapseUI() {
-  const wrap = document.getElementById('facBodyWrap');
-  const btn = document.getElementById('toggleFacBtn');
-  wrap.classList.toggle('collapsed', facCollapsed);
-  btn.innerHTML = facCollapsed ? '&#9656; Show Factions' : '&#9662; Hide Factions';
-}
-
-window.addEventListener('resize', applyResponsiveLayout);
-
-function setAllFac(v) {
-  FACTIONS.forEach(f => f.joined = v);
-  saveAndRender();
-}
-
-function renderFac() {
-  const q = document.getElementById('fSearch').value.toLowerCase();
-  const tb = document.getElementById('fBody');
-  tb.innerHTML = '';
-  let joinedCount = 0;
-
-  FACTIONS.forEach((f, i) => {
-    if (f.joined) joinedCount++;
-    if (q && !f.name.toLowerCase().includes(q) && !f.cat.toLowerCase().includes(q)) return;
-    const div = document.createElement('div');
-    div.className = 'fac-item' + (f.joined ? ' joined' : '');
-    div.innerHTML = `<div class="fac-left">
-        <input type="checkbox" ${f.joined ? 'checked' : ''} onchange="FACTIONS[${i}].joined=this.checked;saveAndRender()">
-        <div style="min-width:0">
-          <div class="fac-name" style="color:${f.joined ? 'var(--text)' : 'var(--muted)'}" title="${f.name}">${f.name}</div>
-          <div class="fac-cat">${f.cat}</div>
-        </div>
-      </div>
-      <input class="rep-in" type="number" value="${f.rep}" step="1000" onchange="FACTIONS[${i}].rep=parseFloat(this.value)||0;saveAndRender()">`;
-    tb.appendChild(div);
-  });
-  document.getElementById('joinedFacCnt').textContent = joinedCount;
-}
-
-function sortBy(c) {
-  if (sCol === c) sAsc = !sAsc;
-  else { sCol = c; sAsc = true; }
-  renderAug();
-}
-
-function bulkSelectFiltered(state) {
-  lastFiltered.forEach(a => {
-    if (a.name === 'NeuroFlux Governor') return;
-    if (state && !a.own) want.add(a.name);
-    else want.delete(a.name);
-  });
-  saveAndRender();
-}
-
-function renderAug() {
-  const q = document.getElementById('aSearch').value.toLowerCase();
-  const acc = document.getElementById('accF').value;
-  const tag = document.getElementById('tagF').value;
-  const hideO = document.getElementById('hideOwn').checked;
-  let av = 0;
-
-  const list = AUGS.map(a => {
-    const inf = getInfo(a);
-    const own = owned.has(a.name) && a.name !== 'NeuroFlux Governor';
-    if (inf.avail && !own) av++;
-    return { ...a, inf, own, w: want.has(a.name) };
-  });
-  document.getElementById('availCnt').textContent = av;
-
-  let flt = list.filter(a => {
-    if (hideO && a.own) return false;
-    if (acc === 'avail' && !a.inf.avail) return false;
-    if (acc === 'ready' && !a.inf.ready) return false;
-    if (tag !== 'ALL' && a.tag !== tag) return false;
-    if (q && !(a.name + ' ' + a.desc + ' ' + a.factions.join(' ')).toLowerCase().includes(q)) return false;
-    return true;
-  });
-
-  flt.sort((a, b) => {
-    let c = 0;
-    if (sCol === 'want') c = (b.w ? 1 : 0) - (a.w ? 1 : 0);
-    else if (sCol === 'own') c = (b.own ? 1 : 0) - (a.own ? 1 : 0);
-    else if (sCol === 'name') c = a.name.localeCompare(b.name);
-    else if (sCol === 'price') c = a.price - b.price;
-    else if (sCol === 'rep') c = a.rep - b.rep;
-    else if (sCol === 'stat') c = a.inf.short - b.inf.short;
-    return sAsc ? c : -c;
-  });
-  lastFiltered = flt;
-
-  const tb = document.getElementById('aBody');
-  tb.innerHTML = '';
-  for (const a of flt) {
-    const esc = a.name.replace(/'/g, "\\'");
-    const bdg = a.own ? '<span class="badge b-info">Owned</span>'
-      : !a.inf.avail ? '<span class="badge b-bad">Not Joined</span>'
-      : a.inf.ready ? `<span class="badge b-ok">Ready (${a.inf.best.name})</span>`
-      : `<span class="badge b-warn">Need ${fmtN(a.inf.short)}</span>`;
-    const isNFG = a.name === 'NeuroFlux Governor';
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td data-label="Add to Cart">${isNFG ? '<span style="color:var(--muted)" title="Use NFG ADD LEVELS box above">Top</span>' : `<input type="checkbox" ${a.w ? 'checked' : ''} ${a.own ? 'disabled' : ''} onchange="if(this.checked)want.add('${esc}');else want.delete('${esc}');saveAndRender()">`}</td>
-      <td data-label="Owned">${isNFG ? '—' : `<input type="checkbox" ${a.own ? 'checked' : ''} onchange="if(this.checked){owned.add('${esc}');want.delete('${esc}');}else owned.delete('${esc}');saveAndRender()">`}</td>
-      <td class="card-title"><div style="font-weight:bold;color:${a.w ? 'var(--accent)' : 'var(--text)'}">${a.name}</div><span class="badge b-info" style="font-size:10px">${a.tag}</span></td>
-      <td data-label="Base Price" style="white-space:nowrap">${fmtM(a.price)}</td>
-      <td data-label="Rep Req" style="white-space:nowrap">${fmtN(a.rep)}</td>
-      <td data-label="Status">${bdg}</td>
-      <td data-label="Prereq" style="font-size:11px;color:var(--muted)">${a.prereq || '—'}</td>
-      <td data-label="Factions" class="col-factions" style="font-size:11px">${a.factions.join(', ')}</td>
-      <td data-label="Effects" class="col-effects" style="font-size:11px;color:var(--muted)">${a.desc}</td>`;
-    tb.appendChild(tr);
-  }
-}
-
-function renderOrd() {
-  const sched = buildSchedule();
-  const tb = document.getElementById('oBody');
-  tb.innerHTML = '';
-  let run = 0;
-
-  sched.forEach((s, i) => {
-    run = s.runningTotal;
-    const inf = getInfo(s.aug, s.reqRep);
-    const bdg = !inf.avail ? '<span class="badge b-bad">Join Faction</span>'
-      : inf.ready ? '<span class="badge b-ok">Ready</span>'
-      : `<span class="badge b-warn">Need ${fmtN(inf.short)}</span>`;
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td data-label="Step" style="color:var(--blue);font-weight:bold">#${i + 1}</td>
-      <td class="card-title" style="font-weight:bold">${s.aug.name}</td>
-      <td data-label="Type"><span class="badge ${s.reason === 'Selected' ? 'b-ok' : 'b-warn'}">${s.reason}</span></td>
-      <td data-label="Base Price" style="white-space:nowrap">${fmtM(s.basePrice)}</td>
-      <td data-label="Actual Cost" style="color:var(--accent);font-weight:bold;white-space:nowrap">${fmtM(s.actualCost)}</td>
-      <td data-label="Running Total" style="white-space:nowrap">${fmtM(run)}</td>
-      <td data-label="Rep Status">${bdg}</td>
-      <td data-label="Best Faction" class="col-factions" style="font-size:11px">${inf.best ? inf.best.name + ' (' + fmtN(inf.maxR) + ' rep)' : s.aug.factions.slice(0, 3).join(', ')}</td>`;
-    tb.appendChild(tr);
-  });
-
-  document.getElementById('cntStat').textContent = sched.length;
-  document.getElementById('ordCnt').textContent = sched.length;
-  document.getElementById('costStat').textContent = fmtM(run);
-  const rem = cash - run;
-  const rEl = document.getElementById('remStat');
-  rEl.textContent = fmtM(rem);
-  rEl.style.color = rem >= 0 ? 'var(--accent)' : 'var(--danger)';
-}
-
-function tab(t) {
-  document.getElementById('tAug').classList.toggle('active', t === 'aug');
-  document.getElementById('tOrd').classList.toggle('active', t === 'ord');
-  document.getElementById('vAug').style.display = t === 'aug' ? 'block' : 'none';
-  document.getElementById('vOrd').style.display = t === 'ord' ? 'block' : 'none';
-}
-
-function saveAndRender() {
-  saveState();
-  renderFac();
-  renderAug();
-  renderOrd();
-}
-
-async function loadSave(ev) {
-  const f = ev.target.files[0];
-  if (!f) return;
-  try {
-    const txt = f.name.endsWith('.gz')
-      ? await new Response(f.stream().pipeThrough(new DecompressionStream('gzip'))).text()
-      : await f.text();
-    const out = JSON.parse(txt);
-    const d = typeof out.data === 'string' ? JSON.parse(out.data) : (out.data || out);
-    const pr = typeof d.PlayerSave === 'string' ? JSON.parse(d.PlayerSave) : (d.PlayerSave || {});
-    const p = pr.data || pr;
-    const fr = typeof d.FactionsSave === 'string' ? JSON.parse(d.FactionsSave) : (d.FactionsSave || {});
-
-    cash = Number(p.money) || 0;
-    document.getElementById('cashIn').value = fmtM(cash);
-
-    const j = new Set(p.factions || []), rm = {};
-    for (const [fn, fo] of Object.entries(fr)) {
-      const fd = (typeof fo === 'string' ? JSON.parse(fo) : fo).data || (typeof fo === 'string' ? JSON.parse(fo) : fo);
-      if (fd.isMember) j.add(fn);
-      if (typeof fd.playerReputation === 'number') rm[fn] = Math.floor(fd.playerReputation);
-    }
-    if (p.faction_rep) {
-      for (const [fn, r] of Object.entries(p.faction_rep)) rm[fn] = Math.floor(r);
-    }
-
-    FACTIONS.forEach(x => { x.joined = j.has(x.name); x.rep = rm[x.name] || 0; });
-
-    owned.clear();
-    let nfgLvl = 0;
-    for (const k of ['augmentations', 'queuedAugmentations']) {
-      if (Array.isArray(p[k])) {
-        p[k].forEach(it => {
-          const nm = typeof it === 'string' ? it : it.name;
-          if (nm === 'NeuroFlux Governor') nfgLvl += (it.level || 1);
-          else if (nm) owned.add(nm);
-        });
-      }
-    }
-    document.getElementById('nfgBaseIn').value = nfgLvl;
-    saveAndRender();
-    alert(`Loaded save! Cash: ${fmtM(cash)} | Joined: ${j.size} | Owned Augs: ${owned.size} | NFG Lvl: ${nfgLvl}`);
-  } catch (e) {
-    alert('Error reading save: ' + e.message);
-  }
-}
-
-loadState();
-updateFacCollapseUI();
-applyResponsiveLayout();
-renderFac();
-renderAug();
-renderOrd();
-</script>
+  <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 </body>
 </html>
