@@ -40,11 +40,56 @@ function getInfo(aug, reqRepOverride) {
 }
 
 /**
+ * Computes the discounted chain-weight (Sidney/Horn priority index) for an ordered
+ * sequence of purchases under exponential cost scaling `mult^step`.
+ * Minimizing `sum(basePrice_i * mult^i)` across independent blocks is achieved by
+ * ordering blocks in descending order of this exact equivalent flat price.
+ * Uses `beta = 1 / mult` when `mult > 1` to avoid floating-point overflow on large stacks.
+ * @param {Array<{basePrice: number}>} seq - Ordered step sequence within a block.
+ * @param {number} mult - Per-purchase exponential cost multiplier.
+ * @returns {number} Equivalent discounted block weight.
+ */
+function computeChainWeight(seq, mult) {
+  const len = seq.length;
+  if (len === 0) return 0;
+  if (len === 1) return seq[0].basePrice;
+
+  if (Math.abs(mult - 1) < 1e-9) {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += seq[i].basePrice;
+    return sum / len;
+  }
+
+  if (mult > 1) {
+    const beta = 1 / mult;
+    let weightedSum = 0;
+    let betaPow = beta;
+    for (let i = len - 1; i >= 0; i--) {
+      weightedSum += seq[i].basePrice * betaPow;
+      betaPow *= beta;
+    }
+    // At loop exit, betaPow equals beta^(len + 1), so beta^len = betaPow / beta = betaPow * mult
+    const betaLen = betaPow * mult;
+    const denom = 1 - betaLen;
+    return denom > 0 ? ((mult - 1) * weightedSum) / denom : seq[0].basePrice;
+  }
+
+  let weightedSum = 0;
+  let mPow = 1;
+  for (let i = 0; i < len; i++) {
+    weightedSum += seq[i].basePrice * mPow;
+    mPow *= mult;
+  }
+  return ((1 - mult) * weightedSum) / (1 - mPow);
+}
+
+/**
  * Computes the minimum-cost purchase order for a target set of augmentations
- * while respecting prerequisite dependencies and NeuroFlux Governor scaling.
+ * and additional NeuroFlux Governor levels while respecting prerequisite dependencies
+ * and Bitburner's shared `mult^step` exponential price scaling.
  * @param {Set<string>} targetSet - Selected augmentation names.
  * @param {number} mult - Per-purchase exponential cost multiplier (default 1.9).
- * @param {number} nfgCnt - Number of additional NeuroFlux Governor levels to append.
+ * @param {number} nfgCnt - Number of additional NeuroFlux Governor levels to include.
  * @param {number} nfgBase - Current installed/queued NeuroFlux Governor level.
  * @returns {{schedule: Array<object>, totalCost: number}} Ordered buy steps and total cost.
  */
@@ -63,69 +108,114 @@ function computeScheduleForSet(targetSet, mult, nfgCnt, nfgBase) {
 
   targetSet.forEach(addWithPrereqs);
 
-  const items = [...required].map((name) => augMap[name]);
-  const inDegree = {};
-  const children = {};
+  // Build active scheduling blocks for regular augmentations
+  const blockById = new Map();
+  const ownerBlock = new Map();
 
-  items.forEach((item) => {
-    inDegree[item.name] = 0;
-    children[item.name] = [];
-  });
-
-  items.forEach((item) => {
-    if (item.prereq && required.has(item.prereq)) {
-      inDegree[item.name]++;
-      children[item.prereq].push(item.name);
-    }
-  });
-
-  // Priority equals the highest effective base price reachable down each prerequisite branch
-  const memo = {};
-  const priority = (name) => {
-    if (memo[name] !== undefined) return memo[name];
-    memo[name] = Math.max(getEffectivePrice(augMap[name]), ...children[name].map(priority));
-    return memo[name];
-  };
-
-  const ready = items.filter((item) => inDegree[item.name] === 0);
-  const schedule = [];
-
-  while (ready.length) {
-    ready.sort(
-      (a, b) =>
-        priority(b.name) - priority(a.name) ||
-        getEffectivePrice(b) - getEffectivePrice(a) ||
-        a.name.localeCompare(b.name)
-    );
-    const current = ready.shift();
-    schedule.push({
-      aug: current,
-      reason: targetSet.has(current.name) ? 'Selected' : 'Auto-Prereq',
-      basePrice: getEffectivePrice(current),
-      reqRep: getEffectiveRep(current),
+  for (const name of required) {
+    const aug = augMap[name];
+    const prereqId = aug.prereq && required.has(aug.prereq) ? aug.prereq : null;
+    const step = {
+      aug,
+      reason: targetSet.has(name) ? 'Selected' : 'Auto-Prereq',
+      basePrice: getEffectivePrice(aug),
+      reqRep: getEffectiveRep(aug),
       isNFG: false
-    });
-    children[current.name].forEach((childName) => {
-      if (--inDegree[childName] === 0) {
-        ready.push(augMap[childName]);
+    };
+    const blk = {
+      id: name,
+      seq: [step],
+      prereqId,
+      childrenIds: new Set(),
+      w: step.basePrice
+    };
+    blockById.set(name, blk);
+    ownerBlock.set(name, blk);
+  }
+
+  for (const blk of blockById.values()) {
+    if (blk.prereqId) {
+      ownerBlock.get(blk.prereqId).childrenIds.add(blk.id);
+    }
+  }
+
+  // Contract prerequisite subtrees using Sidney/Horn discounted chain-weight:
+  // whenever a child block has higher weight than its parent block, it must follow
+  // its parent immediately in the optimal order, so merge it into the parent block.
+  while (true) {
+    let bestChild = null;
+    for (const blk of blockById.values()) {
+      if (!blk.prereqId) continue;
+      const parentBlk = ownerBlock.get(blk.prereqId);
+      if (blk.w > parentBlk.w && (!bestChild || blk.w > bestChild.w)) {
+        bestChild = blk;
       }
+    }
+    if (!bestChild) break;
+
+    const parentBlk = ownerBlock.get(bestChild.prereqId);
+    parentBlk.childrenIds.delete(bestChild.id);
+    for (const step of bestChild.seq) {
+      parentBlk.seq.push(step);
+      ownerBlock.set(step.aug.name, parentBlk);
+    }
+    for (const grandchildId of bestChild.childrenIds) {
+      parentBlk.childrenIds.add(grandchildId);
+    }
+    parentBlk.w = computeChainWeight(parentBlk.seq, mult);
+    blockById.delete(bestChild.id);
+  }
+
+  // Model selected NeuroFlux Governor levels (1.14^(L-1)) as a single strictly-increasing
+  // prerequisite block so its exact discounted chain-weight interleaves NFG ahead of $0
+  // and cheaper augmentations while keeping costlier augmentations first.
+  if (nfgCnt > 0) {
+    const nfgAug = augMap['NeuroFlux Governor'];
+    const bnRepMult = getBnRepMult();
+    const bnCostMult = getBnCostMult();
+    const nfgSeq = [];
+    for (let k = 0; k < nfgCnt; k++) {
+      const lvlMinusOne = nfgBase + k;
+      const levelMult = Math.pow(1.14, lvlMinusOne);
+      nfgSeq.push({
+        aug: { ...nfgAug, name: `NeuroFlux Governor (Lvl ${lvlMinusOne + 1})` },
+        reason: 'NFG Stack',
+        basePrice: 750000 * levelMult * bnCostMult,
+        reqRep: 500 * levelMult * bnRepMult,
+        isNFG: true
+      });
+    }
+    blockById.set('__NFG_BLOCK__', {
+      id: '__NFG_BLOCK__',
+      seq: nfgSeq,
+      prereqId: null,
+      childrenIds: new Set(),
+      w: computeChainWeight(nfgSeq, mult)
     });
   }
 
-  // Append NeuroFlux Governor levels at the end using Bitburner's 1.14^(L-1) cost & rep scaling
-  const nfgAug = augMap['NeuroFlux Governor'];
-  const bnRepMult = getBnRepMult();
-  const bnCostMult = getBnCostMult();
-  for (let k = 0; k < nfgCnt; k++) {
-    const lvlMinusOne = nfgBase + k;
-    const levelMult = Math.pow(1.14, lvlMinusOne);
-    schedule.push({
-      aug: { ...nfgAug, name: `NeuroFlux Governor (Lvl ${lvlMinusOne + 1})` },
-      reason: 'NFG Stack',
-      basePrice: 750000 * levelMult * bnCostMult,
-      reqRep: 500 * levelMult * bnRepMult,
-      isNFG: true
-    });
+  const ready = [];
+  for (const blk of blockById.values()) {
+    if (!blk.prereqId) ready.push(blk);
+  }
+
+  const schedule = [];
+  while (ready.length) {
+    ready.sort(
+      (a, b) =>
+        b.w - a.w ||
+        b.seq[0].basePrice - a.seq[0].basePrice ||
+        (a.seq[0].isNFG ? 1 : 0) - (b.seq[0].isNFG ? 1 : 0) ||
+        a.seq[0].aug.name.localeCompare(b.seq[0].aug.name)
+    );
+    const current = ready.shift();
+    for (const step of current.seq) {
+      schedule.push(step);
+    }
+    for (const childId of current.childrenIds) {
+      const childBlk = blockById.get(childId);
+      if (childBlk) ready.push(childBlk);
+    }
   }
 
   let totalCost = 0;
@@ -225,8 +315,8 @@ const NFG_MAX_SEARCH_LEVELS = 500;
 /**
  * Computes maximum purchasable additional NeuroFlux Governor (NFG) levels
  * constrained by both the highest-rep NFG-eligible joined faction
- * (`500 * 1.14^(L-1) * AugmentationRepCost`) and remaining post-cart cash
- * (`750000 * 1.14^(L-1) * AugmentationMoneyCost * mult^step`).
+ * (`500 * 1.14^(L-1) * AugmentationRepCost`) and exact post-sort schedule cash
+ * via binary search on `computeScheduleForSet`.
  * @param {Set<string>} [targetSet=want] - Selected regular augmentations in cart.
  * @param {number} [mult=getMult()] - Augmentation price multiplier.
  * @param {number} [nfgBase=getNfgBase()] - Current installed/queued NFG level.
@@ -257,7 +347,6 @@ function computeNfgCapacity(targetSet = want, mult = getMult(), nfgBase = getNfg
   const availCash = Math.max(0, cash - regularCost);
 
   const bnRepMult = getBnRepMult();
-  const bnCostMult = getBnCostMult();
 
   const nfgAug = augMap['NeuroFlux Governor'];
   const nfgInfo = getInfo(nfgAug);
@@ -282,33 +371,43 @@ function computeNfgCapacity(targetSet = want, mult = getMult(), nfgBase = getNfg
   }
   const nextRepShortfall = bestFaction ? Math.max(0, nextRepReq - bestFaction.rep) : nextRepReq;
 
-  // 2. Cash ceiling: cumulative 750k * 1.14^(nfgBase + k) * bnCostMult * mult^(regularCount + k) <= availCash
+  // 2. Cash ceiling: binary search exact sorted schedule totalCost <= cash
   let cashMaxAdd = 0;
-  let cashMaxCost = 0;
-  let nextCashCost = 750000 * Math.pow(1.14, nfgBase) * bnCostMult * Math.pow(mult, regularCount);
-  while (cashMaxAdd < NFG_MAX_SEARCH_LEVELS) {
-    const stepCost =
-      750000 * Math.pow(1.14, nfgBase + cashMaxAdd) * bnCostMult * Math.pow(mult, regularCount + cashMaxAdd);
-    if (cashMaxCost + stepCost <= availCash) {
-      cashMaxCost += stepCost;
-      cashMaxAdd++;
+  let cashMaxTotalCost = regularCost;
+  if (cash > regularCost) {
+    const maxSched = computeScheduleForSet(targetSet, mult, NFG_MAX_SEARCH_LEVELS, nfgBase);
+    if (maxSched.totalCost <= cash) {
+      cashMaxAdd = NFG_MAX_SEARCH_LEVELS;
+      cashMaxTotalCost = maxSched.totalCost;
     } else {
-      nextCashCost = stepCost;
-      break;
+      let low = 0;
+      let high = NFG_MAX_SEARCH_LEVELS - 1;
+      while (low < high) {
+        const mid = (low + high + 1) >> 1;
+        const midSched = computeScheduleForSet(targetSet, mult, mid, nfgBase);
+        if (midSched.totalCost <= cash) {
+          low = mid;
+          cashMaxTotalCost = midSched.totalCost;
+        } else {
+          high = mid - 1;
+        }
+      }
+      cashMaxAdd = low;
     }
   }
-  if (cashMaxAdd >= NFG_MAX_SEARCH_LEVELS) {
-    nextCashCost =
-      750000 * Math.pow(1.14, nfgBase + cashMaxAdd) * bnCostMult * Math.pow(mult, regularCount + cashMaxAdd);
-  }
+
+  const cashMaxCost = Math.max(0, cashMaxTotalCost - regularCost);
+  const nextSched = computeScheduleForSet(targetSet, mult, cashMaxAdd + 1, nfgBase);
+  const nextCashCost = Math.max(0, nextSched.totalCost - cashMaxTotalCost);
 
   // 3. Combined purchasable maximum
   const buyableMaxAdd = bestFaction ? Math.min(repMaxAdd, cashMaxAdd) : 0;
-  let buyableCost = 0;
-  for (let k = 0; k < buyableMaxAdd; k++) {
-    buyableCost +=
-      750000 * Math.pow(1.14, nfgBase + k) * bnCostMult * Math.pow(mult, regularCount + k);
-  }
+  const buyableCost =
+    buyableMaxAdd === 0
+      ? 0
+      : buyableMaxAdd === cashMaxAdd
+        ? cashMaxCost
+        : Math.max(0, computeScheduleForSet(targetSet, mult, buyableMaxAdd, nfgBase).totalCost - regularCost);
 
   let bottleneck = 'even';
   if (!bestFaction) {
@@ -357,10 +456,11 @@ function applyMaxNfg() {
   }
 
   if (cap.buyableMaxAdd === 0) {
+    const shortfall = Math.max(0, cap.regularCost + cap.nextCashCost - cash);
     const reason =
       cap.repMaxAdd === 0
         ? `need ${fmtN(cap.nextRepShortfall)} more rep at ${cap.bestFaction.name}`
-        : `need ${fmtM(cap.nextCashCost - cap.availCash)} more remaining cash`;
+        : `need ${fmtM(shortfall)} more cash`;
     showToast(`0 additional NeuroFlux Governor levels affordable (${reason}).`, 'warn');
     return;
   }
