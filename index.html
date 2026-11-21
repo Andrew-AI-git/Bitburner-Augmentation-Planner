@@ -31,7 +31,13 @@
       <div class="stats-grid">
         <div class="box"><label for="cashIn">CURRENT CASH</label><input id="cashIn" value="$0"></div>
         <div class="box"><label for="multIn">MULTIPLIER (1.9)</label><input id="multIn" type="number" value="1.9" step="0.01"></div>
-        <div class="box"><label for="nfgIn">NFG ADD LEVELS (+)</label><input id="nfgIn" type="number" value="0" min="0" max="500"></div>
+        <div class="box">
+          <div class="box-label-row">
+            <label for="nfgIn">NFG ADD LEVELS (+)</label>
+            <button type="button" class="nfg-max-pill" id="nfgMaxPill" title="Click to set NFG ADD LEVELS to maximum buyable">Max: +0</button>
+          </div>
+          <input id="nfgIn" type="number" value="0" min="0" max="500">
+        </div>
         <div class="box"><label for="nfgBaseIn">NFG CURRENT LVL</label><input id="nfgBaseIn" type="number" value="0" min="0"></div>
         <div class="box"><label>PLANNED BUYS</label><div class="val" id="cntStat">0</div></div>
         <div class="box"><label>TOTAL COST</label><div class="val" id="costStat">$0</div></div>
@@ -126,6 +132,42 @@
           <div class="ord-note">
             Ordered for minimum total cost while satisfying prerequisites. Additional <b>NeuroFlux Governor</b> levels are appended at the end using Bitburner's <code>1.14^lvl</code> cost and <code>1.25^lvl</code> rep scaling.
           </div>
+
+          <div class="nfg-tracker" id="nfgTrackerBar">
+            <div class="nfg-tracker-head">
+              <div class="nfg-tracker-title">
+                <strong>NeuroFlux Governor Capacity</strong>
+                <span class="badge b-info" id="nfgBottleneckBadge">Checking...</span>
+              </div>
+              <div class="nfg-tracker-actions">
+                <button type="button" class="btn btn-ok" id="nfgSetMaxBtn">Set Max (+0)</button>
+                <button type="button" class="btn" id="nfgClearBtn">Clear NFG</button>
+              </div>
+            </div>
+            <div class="nfg-tracker-grid">
+              <div class="nfg-metric">
+                <span class="nfg-metric-label">BEST ELIGIBLE FACTION</span>
+                <div class="nfg-metric-val" id="nfgBestFac">—</div>
+                <div class="nfg-metric-sub" id="nfgBestFacRep">—</div>
+              </div>
+              <div class="nfg-metric">
+                <span class="nfg-metric-label">REP CAP (1.25^lvl)</span>
+                <div class="nfg-metric-val" id="nfgRepMax">+0 lvls</div>
+                <div class="nfg-metric-sub" id="nfgRepSub">—</div>
+              </div>
+              <div class="nfg-metric">
+                <span class="nfg-metric-label">CASH CAP (1.14^lvl)</span>
+                <div class="nfg-metric-val" id="nfgCashMax">+0 lvls</div>
+                <div class="nfg-metric-sub" id="nfgCashSub">—</div>
+              </div>
+              <div class="nfg-metric">
+                <span class="nfg-metric-label">COMBINED BUYABLE MAX</span>
+                <div class="nfg-metric-val" id="nfgBuyMax">+0 lvls</div>
+                <div class="nfg-metric-sub" id="nfgBuySub">—</div>
+              </div>
+            </div>
+          </div>
+
           <div class="scroll-box" id="ordScrollBox">
             <table class="resp-table">
               <thead>

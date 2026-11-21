@@ -120,6 +120,47 @@ h3 {
   text-overflow: ellipsis;
 }
 
+.box-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.box-label-row label {
+  margin-bottom: 0;
+}
+
+.nfg-max-pill {
+  background: rgba(88, 166, 255, 0.14);
+  border: 1px solid rgba(88, 166, 255, 0.45);
+  color: var(--blue);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font: bold 10px/1.3 inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.nfg-max-pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.nfg-max-pill.is-at-max {
+  background: rgba(63, 185, 80, 0.16);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.nfg-max-pill.is-empty {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--muted);
+}
+
 .box input {
   background: transparent;
   border: none;
@@ -603,3 +644,92 @@ td.col-effects.has-lore {
     transform: translateY(0);
   }
 }
+
+/* --------------------------------------------------------------------------
+   NeuroFlux Governor Capacity Tracker Bar (Optimal Buy Order Tab)
+   -------------------------------------------------------------------------- */
+
+.nfg-tracker {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nfg-tracker-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.nfg-tracker-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.nfg-tracker-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.nfg-tracker-actions .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.nfg-tracker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+}
+
+.nfg-metric {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  min-width: 0;
+}
+
+.nfg-metric-label {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nfg-metric-val {
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nfg-metric-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+

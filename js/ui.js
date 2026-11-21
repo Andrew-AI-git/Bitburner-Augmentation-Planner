@@ -284,6 +284,89 @@ function renderOrd() {
   const remEl = document.getElementById('remStat');
   remEl.textContent = fmtM(remaining);
   remEl.style.color = remaining >= 0 ? 'var(--accent)' : 'var(--danger)';
+
+  renderNfgTracker();
+}
+
+/**
+ * Updates the topbar NFG Max pill and the Optimal Buy Order NFG Capacity Tracker bar
+ * with current rep-cap, cash-cap, combined buyable max, and single best eligible faction.
+ */
+function renderNfgTracker() {
+  const cap = computeNfgCapacity();
+  const currentAdd = getNfgCnt();
+
+  // Topbar Max badge inside NFG ADD LEVELS (+) box
+  const pill = document.getElementById('nfgMaxPill');
+  if (pill) {
+    pill.textContent = `Max: +${cap.buyableMaxAdd}`;
+    pill.classList.toggle('is-empty', cap.buyableMaxAdd === 0);
+    pill.classList.toggle('is-at-max', cap.buyableMaxAdd > 0 && currentAdd === cap.buyableMaxAdd);
+    pill.title = cap.bestFaction
+      ? `Max buyable NFG: +${cap.buyableMaxAdd} (Lvl ${cap.buyableMaxTotalLvl}) via ${cap.bestFaction.name}. Click to apply.`
+      : 'Join an NFG-eligible faction to unlock NeuroFlux Governor.';
+  }
+
+  // Buy Order NFG Tracker bar
+  const bestFacEl = document.getElementById('nfgBestFac');
+  const bestRepEl = document.getElementById('nfgBestFacRep');
+  const repMaxEl = document.getElementById('nfgRepMax');
+  const repSubEl = document.getElementById('nfgRepSub');
+  const cashMaxEl = document.getElementById('nfgCashMax');
+  const cashSubEl = document.getElementById('nfgCashSub');
+  const buyMaxEl = document.getElementById('nfgBuyMax');
+  const buySubEl = document.getElementById('nfgBuySub');
+  const badgeEl = document.getElementById('nfgBottleneckBadge');
+  const setMaxBtn = document.getElementById('nfgSetMaxBtn');
+  const clearBtn = document.getElementById('nfgClearBtn');
+
+  if (!bestFacEl) return;
+
+  if (cap.bestFaction) {
+    bestFacEl.textContent = cap.bestFaction.name;
+    bestFacEl.style.color = 'var(--text)';
+    bestRepEl.textContent = `${fmtN(cap.bestFaction.rep)} rep available`;
+  } else {
+    bestFacEl.textContent = 'None Joined';
+    bestFacEl.style.color = 'var(--danger)';
+    bestRepEl.textContent = 'Standard factions 0–30 only';
+  }
+
+  repMaxEl.textContent = `+${cap.repMaxAdd} lvls (→ Lvl ${cap.repMaxTotalLvl})`;
+  repMaxEl.style.color = cap.repMaxAdd > 0 ? 'var(--accent)' : 'var(--muted)';
+  repSubEl.textContent =
+    cap.repMaxAdd >= NFG_MAX_SEARCH_LEVELS
+      ? `Next Lvl ${cap.repMaxTotalLvl + 1}: ${fmtN(cap.nextRepReq)} rep`
+      : `Next Lvl ${cap.repMaxTotalLvl + 1}: need +${fmtN(cap.nextRepShortfall)} rep`;
+
+  cashMaxEl.textContent = `+${cap.cashMaxAdd} lvls (→ Lvl ${cap.cashMaxTotalLvl})`;
+  cashMaxEl.style.color = cap.cashMaxAdd > 0 ? 'var(--accent)' : 'var(--muted)';
+  cashSubEl.textContent =
+    cap.cashMaxAdd > 0
+      ? `Post-cart: ${fmtM(cap.availCash)} • NFG: ${fmtM(cap.cashMaxCost)}`
+      : `Post-cart cash: ${fmtM(cap.availCash)} (next: ${fmtM(cap.nextCashCost)})`;
+
+  buyMaxEl.textContent = `+${cap.buyableMaxAdd} lvls (→ Lvl ${cap.buyableMaxTotalLvl})`;
+  buyMaxEl.style.color = cap.buyableMaxAdd > 0 ? 'var(--blue)' : 'var(--muted)';
+  buySubEl.textContent =
+    cap.buyableMaxAdd > 0
+      ? `NFG cost: ${fmtM(cap.buyableCost)} • Planned: +${currentAdd}`
+      : `Planned: +${currentAdd} • Next: ${fmtM(cap.nextCashCost)}`;
+
+  const badgeConfig = {
+    'no-faction': { text: 'No NFG Faction', cls: 'b-bad' },
+    rep: { text: 'Rep-Limited', cls: 'b-warn' },
+    cash: { text: 'Cash-Limited', cls: 'b-info' },
+    cap: { text: '500+ Cap', cls: 'b-ok' },
+    even: { text: cap.buyableMaxAdd > 0 ? 'Rep & Cash Even' : 'Blocked', cls: cap.buyableMaxAdd > 0 ? 'b-ok' : 'b-warn' }
+  }[cap.bottleneck];
+
+  badgeEl.textContent = badgeConfig.text;
+  badgeEl.className = `badge ${badgeConfig.cls}`;
+
+  setMaxBtn.textContent = `Set Max (+${cap.buyableMaxAdd})`;
+  setMaxBtn.disabled = !cap.bestFaction || cap.buyableMaxAdd === 0 || currentAdd === cap.buyableMaxAdd;
+  clearBtn.style.display = currentAdd > 0 ? 'inline-flex' : 'none';
 }
 
 /**
@@ -321,6 +404,12 @@ function bindEvents() {
   document.getElementById('multIn').addEventListener('change', saveAndRender);
   document.getElementById('nfgIn').addEventListener('change', saveAndRender);
   document.getElementById('nfgBaseIn').addEventListener('change', saveAndRender);
+  document.getElementById('nfgMaxPill').addEventListener('click', applyMaxNfg);
+  document.getElementById('nfgSetMaxBtn').addEventListener('click', applyMaxNfg);
+  document.getElementById('nfgClearBtn').addEventListener('click', () => {
+    document.getElementById('nfgIn').value = 0;
+    saveAndRender();
+  });
 
   // Factions panel controls & delegated faction grid listener
   document.getElementById('toggleFacBtn').addEventListener('click', toggleFacPanel);

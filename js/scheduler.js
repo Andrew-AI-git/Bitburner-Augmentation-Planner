@@ -211,3 +211,151 @@ function autoFillHighestRep() {
     'success'
   );
 }
+
+/** @type {number} Upper safety bound for iterative NFG capacity calculation */
+const NFG_MAX_SEARCH_LEVELS = 500;
+
+/**
+ * Computes maximum purchasable additional NeuroFlux Governor (NFG) levels
+ * constrained by both the highest-rep NFG-eligible joined faction (1.25^lvl)
+ * and remaining post-cart cash (1.14^lvl * mult^step).
+ * @param {Set<string>} [targetSet=want] - Selected regular augmentations in cart.
+ * @param {number} [mult=getMult()] - Augmentation price multiplier.
+ * @param {number} [nfgBase=getNfgBase()] - Current installed/queued NFG level.
+ * @returns {{
+ *   nfgBase: number,
+ *   bestFaction: {name: string, cat: string, joined: boolean, rep: number}|null,
+ *   regularCount: number,
+ *   regularCost: number,
+ *   availCash: number,
+ *   repMaxAdd: number,
+ *   repMaxTotalLvl: number,
+ *   nextRepReq: number,
+ *   nextRepShortfall: number,
+ *   cashMaxAdd: number,
+ *   cashMaxTotalLvl: number,
+ *   cashMaxCost: number,
+ *   nextCashCost: number,
+ *   buyableMaxAdd: number,
+ *   buyableMaxTotalLvl: number,
+ *   buyableCost: number,
+ *   bottleneck: 'no-faction'|'rep'|'cash'|'cap'|'even'
+ * }} NFG scaling capacity snapshot.
+ */
+function computeNfgCapacity(targetSet = want, mult = getMult(), nfgBase = getNfgBase()) {
+  const baseSched = computeScheduleForSet(targetSet, mult, 0, nfgBase);
+  const regularCount = baseSched.schedule.length;
+  const regularCost = baseSched.totalCost;
+  const availCash = Math.max(0, cash - regularCost);
+
+  const nfgAug = augMap['NeuroFlux Governor'];
+  const nfgInfo = getInfo(nfgAug);
+  const bestFaction = nfgInfo.best;
+
+  // 1. Reputation ceiling: 500 * 1.25^(nfgBase + k) <= bestFaction.rep
+  let repMaxAdd = 0;
+  let nextRepReq = 500 * Math.pow(1.25, nfgBase);
+  if (bestFaction) {
+    while (repMaxAdd < NFG_MAX_SEARCH_LEVELS) {
+      const req = 500 * Math.pow(1.25, nfgBase + repMaxAdd);
+      if (bestFaction.rep >= req) {
+        repMaxAdd++;
+      } else {
+        nextRepReq = req;
+        break;
+      }
+    }
+    if (repMaxAdd >= NFG_MAX_SEARCH_LEVELS) {
+      nextRepReq = 500 * Math.pow(1.25, nfgBase + repMaxAdd);
+    }
+  }
+  const nextRepShortfall = bestFaction ? Math.max(0, nextRepReq - bestFaction.rep) : nextRepReq;
+
+  // 2. Cash ceiling: cumulative 750k * 1.14^(nfgBase + k) * mult^(regularCount + k) <= availCash
+  let cashMaxAdd = 0;
+  let cashMaxCost = 0;
+  let nextCashCost = 750000 * Math.pow(1.14, nfgBase) * Math.pow(mult, regularCount);
+  while (cashMaxAdd < NFG_MAX_SEARCH_LEVELS) {
+    const stepCost =
+      750000 * Math.pow(1.14, nfgBase + cashMaxAdd) * Math.pow(mult, regularCount + cashMaxAdd);
+    if (cashMaxCost + stepCost <= availCash) {
+      cashMaxCost += stepCost;
+      cashMaxAdd++;
+    } else {
+      nextCashCost = stepCost;
+      break;
+    }
+  }
+  if (cashMaxAdd >= NFG_MAX_SEARCH_LEVELS) {
+    nextCashCost =
+      750000 * Math.pow(1.14, nfgBase + cashMaxAdd) * Math.pow(mult, regularCount + cashMaxAdd);
+  }
+
+  // 3. Combined purchasable maximum
+  const buyableMaxAdd = bestFaction ? Math.min(repMaxAdd, cashMaxAdd) : 0;
+  let buyableCost = 0;
+  for (let k = 0; k < buyableMaxAdd; k++) {
+    buyableCost += 750000 * Math.pow(1.14, nfgBase + k) * Math.pow(mult, regularCount + k);
+  }
+
+  let bottleneck = 'even';
+  if (!bestFaction) {
+    bottleneck = 'no-faction';
+  } else if (repMaxAdd >= NFG_MAX_SEARCH_LEVELS && cashMaxAdd >= NFG_MAX_SEARCH_LEVELS) {
+    bottleneck = 'cap';
+  } else if (repMaxAdd < cashMaxAdd) {
+    bottleneck = 'rep';
+  } else if (cashMaxAdd < repMaxAdd) {
+    bottleneck = 'cash';
+  }
+
+  return {
+    nfgBase,
+    bestFaction,
+    regularCount,
+    regularCost,
+    availCash,
+    repMaxAdd,
+    repMaxTotalLvl: nfgBase + repMaxAdd,
+    nextRepReq,
+    nextRepShortfall,
+    cashMaxAdd,
+    cashMaxTotalLvl: nfgBase + cashMaxAdd,
+    cashMaxCost,
+    nextCashCost,
+    buyableMaxAdd,
+    buyableMaxTotalLvl: nfgBase + buyableMaxAdd,
+    buyableCost,
+    bottleneck
+  };
+}
+
+/**
+ * Sets `NFG ADD LEVELS (+)` to the maximum combined buyable NFG levels
+ * and displays a non-blocking status toast explaining the result.
+ */
+function applyMaxNfg() {
+  const cap = computeNfgCapacity();
+  document.getElementById('nfgIn').value = cap.buyableMaxAdd;
+  saveAndRender();
+
+  if (!cap.bestFaction) {
+    showToast('Join an NFG-eligible faction first (Bladeburners, Church of the Machine God, and SoA do not offer NFG).', 'warn');
+    return;
+  }
+
+  if (cap.buyableMaxAdd === 0) {
+    const reason =
+      cap.repMaxAdd === 0
+        ? `need ${fmtN(cap.nextRepShortfall)} more rep at ${cap.bestFaction.name}`
+        : `need ${fmtM(cap.nextCashCost - cap.availCash)} more remaining cash`;
+    showToast(`0 additional NeuroFlux Governor levels affordable (${reason}).`, 'warn');
+    return;
+  }
+
+  showToast(
+    `Set NFG levels to +${cap.buyableMaxAdd} (Lvl ${cap.buyableMaxTotalLvl}) via ${cap.bestFaction.name} for ${fmtM(cap.buyableCost)}.`,
+    'success'
+  );
+}
+
