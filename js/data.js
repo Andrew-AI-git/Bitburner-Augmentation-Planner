@@ -439,3 +439,41 @@ function resolveAugName(raw) {
   if (augMap[trimmed] || specialAugMap[trimmed]) return trimmed;
   return augLookupIndex.get(normalizeAugName(trimmed)) || null;
 }
+
+/**
+ * Official Bitburner BitNode multipliers affecting augmentation costs & rep
+ * (`AugmentationRepCost` and `AugmentationMoneyCost`), sourced from BitNode.tsx.
+ * BitNode 12 scales exponentially by 1.02^(sf12Level + 1).
+ * @type {Record<number, {rep: number, money: number}>}
+ */
+const BITNODE_AUG_MULTIPLIERS = {
+  1: { rep: 1, money: 1 },
+  2: { rep: 1, money: 1 },
+  3: { rep: 3, money: 3 },
+  4: { rep: 1, money: 1 },
+  5: { rep: 1, money: 2 },
+  6: { rep: 1, money: 1 },
+  7: { rep: 1, money: 3 },
+  8: { rep: 1, money: 1 },
+  9: { rep: 1, money: 1 },
+  10: { rep: 2, money: 5 },
+  11: { rep: 1, money: 2 },
+  13: { rep: 1, money: 1 },
+  14: { rep: 1, money: 1.5 },
+  15: { rep: 1, money: 3 }
+};
+
+/**
+ * Resolves the active BitNode's augmentation rep and money cost multipliers.
+ * @param {number} bitNodeN - Active BitNode number (1–15).
+ * @param {number} [sf12Level=0] - Active Source-File 12 level (used for BitNode 12 recursion).
+ * @returns {{rep: number, money: number}} AugmentationRepCost and AugmentationMoneyCost multipliers.
+ */
+function getBitNodeAugMults(bitNodeN, sf12Level = 0) {
+  if (bitNodeN === 12) {
+    const inc = Math.pow(1.02, Math.max(0, sf12Level) + 1);
+    return { rep: inc, money: inc };
+  }
+  return BITNODE_AUG_MULTIPLIERS[bitNodeN] || { rep: 1, money: 1 };
+}
+

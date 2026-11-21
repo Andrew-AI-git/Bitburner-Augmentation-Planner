@@ -75,6 +75,53 @@ function getMult() {
 }
 
 /**
+ * Reads the active BitNode reputation cost multiplier (`AugmentationRepCost`).
+ * @returns {number} Positive multiplier (defaults to 1).
+ */
+function getBnRepMult() {
+  const val = parseFloat(document.getElementById('bnRepIn').value);
+  return val > 0 ? val : 1;
+}
+
+/**
+ * Reads the active BitNode money cost multiplier (`AugmentationMoneyCost`).
+ * @returns {number} Positive multiplier (defaults to 1).
+ */
+function getBnCostMult() {
+  const val = parseFloat(document.getElementById('bnCostIn').value);
+  return val > 0 ? val : 1;
+}
+
+/**
+ * Checks whether an augmentation belongs to Shadows of Anarchy (exempt from BitNode cost/rep mults).
+ * @param {object} aug - Augmentation record.
+ * @returns {boolean} True if Shadows of Anarchy augmentation.
+ */
+function isSoaAug(aug) {
+  return !!aug && aug.tag === 'Infiltration';
+}
+
+/**
+ * Computes effective base money cost applying BitNode `AugmentationMoneyCost` (exempting SoA).
+ * @param {object} aug - Augmentation record.
+ * @returns {number} Effective base price.
+ */
+function getEffectivePrice(aug) {
+  if (!aug) return 0;
+  return isSoaAug(aug) ? aug.price : aug.price * getBnCostMult();
+}
+
+/**
+ * Computes effective reputation requirement applying BitNode `AugmentationRepCost` (exempting SoA).
+ * @param {object} aug - Augmentation record.
+ * @returns {number} Effective reputation requirement.
+ */
+function getEffectiveRep(aug) {
+  if (!aug) return 0;
+  return isSoaAug(aug) ? aug.rep : aug.rep * getBnRepMult();
+}
+
+/**
  * Reads the number of additional NeuroFlux Governor levels to append.
  * @returns {number} Non-negative integer count.
  */
@@ -116,6 +163,8 @@ function saveState() {
       JSON.stringify({
         cash,
         mult: getMult(),
+        bnRepMult: getBnRepMult(),
+        bnCostMult: getBnCostMult(),
         nfg: getNfgCnt(),
         nfgBase: getNfgBase(),
         factions: FACTIONS.map((f) => [f.name, f.joined ? 1 : 0, f.rep]),
@@ -142,6 +191,8 @@ function loadState() {
     document.getElementById('cashIn').value = fmtM(cash);
 
     if (saved.mult) document.getElementById('multIn').value = saved.mult;
+    if (saved.bnRepMult) document.getElementById('bnRepIn').value = saved.bnRepMult;
+    if (saved.bnCostMult) document.getElementById('bnCostIn').value = saved.bnCostMult;
     if (saved.nfg !== undefined) document.getElementById('nfgIn').value = saved.nfg;
     if (saved.nfgBase !== undefined) document.getElementById('nfgBaseIn').value = saved.nfgBase;
 

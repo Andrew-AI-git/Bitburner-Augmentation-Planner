@@ -81,9 +81,31 @@ export async function main(ns) {
 }
 
 /**
+ * Extracts a Source-File level from a Bitburner PlayerSave object,
+ * handling array-of-tuples, JSONMap `{ ctor, data }`, or plain-object formats.
+ * @param {object} player - Parsed PlayerSave data object.
+ * @param {number} sfNum - Source-File number (e.g. 11 or 12).
+ * @returns {number} Active Source-File level (0 if not owned).
+ */
+function extractSourceFileLevel(player, sfNum) {
+  const overrideVal = player?.bitNodeOptions?.sourceFileOverrides?.data
+    ? Object.fromEntries(player.bitNodeOptions.sourceFileOverrides.data)[sfNum]
+    : undefined;
+  if (typeof overrideVal === 'number') return overrideVal;
+
+  const sf = player?.sourceFiles;
+  if (!sf) return 0;
+  const entries = Array.isArray(sf) ? sf : Array.isArray(sf.data) ? sf.data : Object.entries(sf);
+  for (const [k, v] of entries) {
+    if (Number(k) === sfNum) return Number(v) || 0;
+  }
+  return 0;
+}
+
+/**
  * Parses an uploaded Bitburner save file (.json or .json.gz) and imports
- * player cash, joined factions, faction reputation, owned augmentations,
- * and current NeuroFlux Governor level.
+ * player cash, BitNode multipliers, SF11 price multiplier, joined factions,
+ * faction reputation, owned augmentations, and cumulative NFG level.
  * @param {Event} ev - Change event from the `#saveFile` file input.
  * @returns {Promise<void>}
  */
@@ -104,6 +126,18 @@ async function loadSave(ev) {
 
     cash = Number(player.money) || 0;
     document.getElementById('cashIn').value = fmtM(cash);
+
+    const bitNodeN = Number(player.bitNodeN) || 1;
+    const sf11Lvl = extractSourceFileLevel(player, 11);
+    const sf12Lvl = extractSourceFileLevel(player, 12);
+    const bnMults = getBitNodeAugMults(bitNodeN, sf12Lvl);
+
+    document.getElementById('bnRepIn').value = Number(bnMults.rep.toFixed(4));
+    document.getElementById('bnCostIn').value = Number(bnMults.money.toFixed(4));
+
+    const sf11Scales = [1, 0.96, 0.94, 0.93];
+    const augMult = 1.9 * sf11Scales[Math.min(3, Math.max(0, sf11Lvl))];
+    document.getElementById('multIn').value = Number(augMult.toFixed(4));
 
     const joinedSet = new Set(player.factions || []);
     const repMap = {};
@@ -140,7 +174,11 @@ async function loadSave(ev) {
           if (!canon) return;
 
           if (canon === 'NeuroFlux Governor') {
-            nfgLvl += entry?.level || 1;
+            if (entry && typeof entry.level === 'number') {
+              nfgLvl = Math.max(nfgLvl, entry.level);
+            } else {
+              nfgLvl += 1;
+            }
           } else if (augMap[canon]) {
             owned.add(canon);
             want.delete(canon);
@@ -156,7 +194,7 @@ async function loadSave(ev) {
 
     const specialNote = specialOwned.size ? ` (+${specialOwned.size} special)` : '';
     showToast(
-      `Loaded save! Cash: ${fmtM(cash)} | Joined: ${joinedSet.size} | Owned Augs: ${owned.size}${specialNote} | NFG Lvl: ${nfgLvl}`,
+      `Loaded BN${bitNodeN} save! Cash: ${fmtM(cash)} | Joined: ${joinedSet.size} | Owned Augs: ${owned.size}${specialNote} | NFG Lvl: ${nfgLvl}`,
       'success'
     );
   } catch (err) {

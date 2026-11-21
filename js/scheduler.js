@@ -15,7 +15,7 @@
  * }} Availability and reputation gap details.
  */
 function getInfo(aug, reqRepOverride) {
-  const reqRep = reqRepOverride !== undefined ? reqRepOverride : aug.rep;
+  const reqRep = reqRepOverride !== undefined ? reqRepOverride : getEffectiveRep(aug);
   const factionByName = Object.fromEntries(FACTIONS.map((f) => [f.name, f]));
   const joinedProviders = aug.factions
     .map((name) => factionByName[name])
@@ -79,11 +79,11 @@ function computeScheduleForSet(targetSet, mult, nfgCnt, nfgBase) {
     }
   });
 
-  // Priority equals the highest base price reachable down each prerequisite branch
+  // Priority equals the highest effective base price reachable down each prerequisite branch
   const memo = {};
   const priority = (name) => {
     if (memo[name] !== undefined) return memo[name];
-    memo[name] = Math.max(augMap[name].price, ...children[name].map(priority));
+    memo[name] = Math.max(getEffectivePrice(augMap[name]), ...children[name].map(priority));
     return memo[name];
   };
 
@@ -94,15 +94,15 @@ function computeScheduleForSet(targetSet, mult, nfgCnt, nfgBase) {
     ready.sort(
       (a, b) =>
         priority(b.name) - priority(a.name) ||
-        b.price - a.price ||
+        getEffectivePrice(b) - getEffectivePrice(a) ||
         a.name.localeCompare(b.name)
     );
     const current = ready.shift();
     schedule.push({
       aug: current,
       reason: targetSet.has(current.name) ? 'Selected' : 'Auto-Prereq',
-      basePrice: current.price,
-      reqRep: current.rep,
+      basePrice: getEffectivePrice(current),
+      reqRep: getEffectiveRep(current),
       isNFG: false
     });
     children[current.name].forEach((childName) => {
@@ -112,15 +112,18 @@ function computeScheduleForSet(targetSet, mult, nfgCnt, nfgBase) {
     });
   }
 
-  // Append NeuroFlux Governor levels at the end using Bitburner 1.14^lvl cost & 1.25^lvl rep
+  // Append NeuroFlux Governor levels at the end using Bitburner's 1.14^(L-1) cost & rep scaling
   const nfgAug = augMap['NeuroFlux Governor'];
+  const bnRepMult = getBnRepMult();
+  const bnCostMult = getBnCostMult();
   for (let k = 0; k < nfgCnt; k++) {
-    const lvl = nfgBase + k;
+    const lvlMinusOne = nfgBase + k;
+    const levelMult = Math.pow(1.14, lvlMinusOne);
     schedule.push({
-      aug: { ...nfgAug, name: `NeuroFlux Governor (Lvl ${lvl + 1})` },
+      aug: { ...nfgAug, name: `NeuroFlux Governor (Lvl ${lvlMinusOne + 1})` },
       reason: 'NFG Stack',
-      basePrice: 750000 * Math.pow(1.14, lvl),
-      reqRep: 500 * Math.pow(1.25, lvl),
+      basePrice: 750000 * levelMult * bnCostMult,
+      reqRep: 500 * levelMult * bnRepMult,
       isNFG: true
     });
   }
@@ -175,8 +178,10 @@ function autoFillHighestRep() {
     return;
   }
 
-  // Pass 1: maximize total count by adding lowest base-price items first (rep desc tie-break)
-  const byCountAndRep = [...candidates].sort((a, b) => a.price - b.price || b.rep - a.rep);
+  // Pass 1: maximize total count by adding lowest effective base-price items first (rep desc tie-break)
+  const byCountAndRep = [...candidates].sort(
+    (a, b) => getEffectivePrice(a) - getEffectivePrice(b) || getEffectiveRep(b) - getEffectiveRep(a)
+  );
   let chosen = new Set();
 
   for (const cand of byCountAndRep) {
@@ -190,7 +195,9 @@ function autoFillHighestRep() {
   }
 
   // Pass 2: fill any remaining budget prioritizing highest reputation requirements
-  const byHighestRep = [...candidates].sort((a, b) => b.rep - a.rep || a.price - b.price);
+  const byHighestRep = [...candidates].sort(
+    (a, b) => getEffectiveRep(b) - getEffectiveRep(a) || getEffectivePrice(a) - getEffectivePrice(b)
+  );
   for (const cand of byHighestRep) {
     if (chosen.has(cand.name)) continue;
     const trial = new Set(chosen);
@@ -217,8 +224,9 @@ const NFG_MAX_SEARCH_LEVELS = 500;
 
 /**
  * Computes maximum purchasable additional NeuroFlux Governor (NFG) levels
- * constrained by both the highest-rep NFG-eligible joined faction (1.25^lvl)
- * and remaining post-cart cash (1.14^lvl * mult^step).
+ * constrained by both the highest-rep NFG-eligible joined faction
+ * (`500 * 1.14^(L-1) * AugmentationRepCost`) and remaining post-cart cash
+ * (`750000 * 1.14^(L-1) * AugmentationMoneyCost * mult^step`).
  * @param {Set<string>} [targetSet=want] - Selected regular augmentations in cart.
  * @param {number} [mult=getMult()] - Augmentation price multiplier.
  * @param {number} [nfgBase=getNfgBase()] - Current installed/queued NFG level.
@@ -248,16 +256,19 @@ function computeNfgCapacity(targetSet = want, mult = getMult(), nfgBase = getNfg
   const regularCost = baseSched.totalCost;
   const availCash = Math.max(0, cash - regularCost);
 
+  const bnRepMult = getBnRepMult();
+  const bnCostMult = getBnCostMult();
+
   const nfgAug = augMap['NeuroFlux Governor'];
   const nfgInfo = getInfo(nfgAug);
   const bestFaction = nfgInfo.best;
 
-  // 1. Reputation ceiling: 500 * 1.25^(nfgBase + k) <= bestFaction.rep
+  // 1. Reputation ceiling: 500 * 1.14^(nfgBase + k) * bnRepMult <= bestFaction.rep
   let repMaxAdd = 0;
-  let nextRepReq = 500 * Math.pow(1.25, nfgBase);
+  let nextRepReq = 500 * Math.pow(1.14, nfgBase) * bnRepMult;
   if (bestFaction) {
     while (repMaxAdd < NFG_MAX_SEARCH_LEVELS) {
-      const req = 500 * Math.pow(1.25, nfgBase + repMaxAdd);
+      const req = 500 * Math.pow(1.14, nfgBase + repMaxAdd) * bnRepMult;
       if (bestFaction.rep >= req) {
         repMaxAdd++;
       } else {
@@ -266,18 +277,18 @@ function computeNfgCapacity(targetSet = want, mult = getMult(), nfgBase = getNfg
       }
     }
     if (repMaxAdd >= NFG_MAX_SEARCH_LEVELS) {
-      nextRepReq = 500 * Math.pow(1.25, nfgBase + repMaxAdd);
+      nextRepReq = 500 * Math.pow(1.14, nfgBase + repMaxAdd) * bnRepMult;
     }
   }
   const nextRepShortfall = bestFaction ? Math.max(0, nextRepReq - bestFaction.rep) : nextRepReq;
 
-  // 2. Cash ceiling: cumulative 750k * 1.14^(nfgBase + k) * mult^(regularCount + k) <= availCash
+  // 2. Cash ceiling: cumulative 750k * 1.14^(nfgBase + k) * bnCostMult * mult^(regularCount + k) <= availCash
   let cashMaxAdd = 0;
   let cashMaxCost = 0;
-  let nextCashCost = 750000 * Math.pow(1.14, nfgBase) * Math.pow(mult, regularCount);
+  let nextCashCost = 750000 * Math.pow(1.14, nfgBase) * bnCostMult * Math.pow(mult, regularCount);
   while (cashMaxAdd < NFG_MAX_SEARCH_LEVELS) {
     const stepCost =
-      750000 * Math.pow(1.14, nfgBase + cashMaxAdd) * Math.pow(mult, regularCount + cashMaxAdd);
+      750000 * Math.pow(1.14, nfgBase + cashMaxAdd) * bnCostMult * Math.pow(mult, regularCount + cashMaxAdd);
     if (cashMaxCost + stepCost <= availCash) {
       cashMaxCost += stepCost;
       cashMaxAdd++;
@@ -288,14 +299,15 @@ function computeNfgCapacity(targetSet = want, mult = getMult(), nfgBase = getNfg
   }
   if (cashMaxAdd >= NFG_MAX_SEARCH_LEVELS) {
     nextCashCost =
-      750000 * Math.pow(1.14, nfgBase + cashMaxAdd) * Math.pow(mult, regularCount + cashMaxAdd);
+      750000 * Math.pow(1.14, nfgBase + cashMaxAdd) * bnCostMult * Math.pow(mult, regularCount + cashMaxAdd);
   }
 
   // 3. Combined purchasable maximum
   const buyableMaxAdd = bestFaction ? Math.min(repMaxAdd, cashMaxAdd) : 0;
   let buyableCost = 0;
   for (let k = 0; k < buyableMaxAdd; k++) {
-    buyableCost += 750000 * Math.pow(1.14, nfgBase + k) * Math.pow(mult, regularCount + k);
+    buyableCost +=
+      750000 * Math.pow(1.14, nfgBase + k) * bnCostMult * Math.pow(mult, regularCount + k);
   }
 
   let bottleneck = 'even';

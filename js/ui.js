@@ -171,8 +171,10 @@ function renderAug() {
   const list = AUGS.map((aug) => {
     const inf = getInfo(aug);
     const own = owned.has(aug.name) && aug.name !== 'NeuroFlux Governor';
+    const effPrice = getEffectivePrice(aug);
+    const effRep = getEffectiveRep(aug);
     if (inf.avail && !own) availCount++;
-    return { ...aug, inf, own, w: want.has(aug.name) };
+    return { ...aug, effPrice, effRep, inf, own, w: want.has(aug.name) };
   });
   document.getElementById('availCnt').textContent = availCount;
 
@@ -192,8 +194,8 @@ function renderAug() {
     if (sCol === 'want') cmp = (b.w ? 1 : 0) - (a.w ? 1 : 0);
     else if (sCol === 'own') cmp = (b.own ? 1 : 0) - (a.own ? 1 : 0);
     else if (sCol === 'name') cmp = a.name.localeCompare(b.name);
-    else if (sCol === 'price') cmp = a.price - b.price;
-    else if (sCol === 'rep') cmp = a.rep - b.rep;
+    else if (sCol === 'price') cmp = a.effPrice - b.effPrice;
+    else if (sCol === 'rep') cmp = a.effRep - b.effRep;
     else if (sCol === 'stat') cmp = a.inf.short - b.inf.short;
     return sAsc ? cmp : -cmp;
   });
@@ -229,8 +231,8 @@ function renderAug() {
         <div style="font-weight:bold;color:${aug.w ? 'var(--accent)' : 'var(--text)'}">${safeName}</div>
         <span class="badge b-info" style="font-size:10px">${escapeHtml(aug.tag)}</span>
       </td>
-      <td data-label="Base Price" class="nowrap">${fmtM(aug.price)}</td>
-      <td data-label="Rep Req" class="nowrap">${fmtN(aug.rep)}</td>
+      <td data-label="Base Price" class="nowrap">${fmtM(aug.effPrice)}</td>
+      <td data-label="Rep Req" class="nowrap">${fmtN(aug.effRep)}</td>
       <td data-label="Status">${statusBadge}</td>
       <td data-label="Prereq" class="text-muted-sm">${aug.prereq ? escapeHtml(aug.prereq) : '—'}</td>
       <td data-label="Factions" class="col-factions">${escapeHtml(aug.factions.join(', '))}</td>
@@ -402,6 +404,8 @@ function bindEvents() {
 
   document.getElementById('cashIn').addEventListener('change', parseCash);
   document.getElementById('multIn').addEventListener('change', saveAndRender);
+  document.getElementById('bnRepIn').addEventListener('change', saveAndRender);
+  document.getElementById('bnCostIn').addEventListener('change', saveAndRender);
   document.getElementById('nfgIn').addEventListener('change', saveAndRender);
   document.getElementById('nfgBaseIn').addEventListener('change', saveAndRender);
   document.getElementById('nfgMaxPill').addEventListener('click', applyMaxNfg);
